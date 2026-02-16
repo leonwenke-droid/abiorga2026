@@ -55,6 +55,14 @@ export default function ShiftPlanWeekNav({
 }: Props) {
   const safeIndex = Math.max(0, Math.min(currentWeekIndex, weeks.length - 1));
   const [weekIndex, setWeekIndex] = useState(safeIndex);
+  const todayStr = getTodayDateString();
+  const getTodayDayIndex = (w: WeekData) => w.days.findIndex((d) => d.dateStr === todayStr);
+  const [dayIndex, setDayIndex] = useState(() => {
+    const w = weeks[Math.max(0, Math.min(currentWeekIndex, weeks.length - 1))];
+    if (!w) return 0;
+    const idx = getTodayDayIndex(w);
+    return idx >= 0 ? idx : 0;
+  });
   const [overlayDay, setOverlayDay] = useState<DayData | null>(null);
   const [exportDay, setExportDay] = useState<DayData | null>(null);
   const [exportFormat, setExportFormat] = useState<"png" | "jpeg">("png");
@@ -64,6 +72,13 @@ export default function ShiftPlanWeekNav({
   const week = weeks[weekIndex];
   const canGoLeft = weekIndex > 0;
   const canGoRight = weekIndex < weeks.length - 1;
+
+  useEffect(() => {
+    const w = weeks[weekIndex];
+    if (!w) return;
+    const idx = w.days.findIndex((d) => d.dateStr === todayStr);
+    setDayIndex((prev) => (idx >= 0 ? idx : Math.min(prev, w.days.length - 1)));
+  }, [weekIndex, weeks, todayStr]);
 
   const displayName = (userId: string) => profileNames[userId] ?? "–";
 
@@ -107,6 +122,59 @@ export default function ShiftPlanWeekNav({
   }
 
   const { weekLabel, days } = week;
+  const currentDay = days[Math.max(0, Math.min(dayIndex, days.length - 1))];
+  const canDayLeft = dayIndex > 0;
+  const canDayRight = dayIndex < days.length - 1;
+
+  const renderDayCard = (day: DayData) => {
+    const isToday = day.dateStr === todayStr;
+    const hasShifts = day.shifts.length > 0;
+    return (
+      <>
+        <div className="flex items-center gap-2 flex-wrap shrink-0">
+          <p className={`text-[11px] font-semibold ${isToday ? "text-cyan-300" : "text-cyan-400/90"}`}>
+            {day.weekdayName} {day.dateStr.slice(8, 10)}.{day.dateStr.slice(5, 7)}.
+          </p>
+          {isToday && (
+            <span className="rounded bg-cyan-500/30 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-cyan-200">
+              Heute
+            </span>
+          )}
+        </div>
+        {!hasShifts ? (
+          <p className="mt-1 text-[11px] text-cyan-400/50">–</p>
+        ) : (
+          <>
+            <div className="mt-1 border-t border-cyan-500/15 pt-1.5 space-y-1">
+              {day.dayTitle && (
+                <p className="text-[10px] font-medium text-cyan-200/90 line-clamp-2">
+                  {day.dayTitle}</p>
+              )}
+              {day.location && (
+                <p className="text-[10px] text-cyan-400/70">Ort: {day.location}</p>
+              )}
+              {day.notes && (
+                <p className="text-[10px] text-cyan-200/70 line-clamp-2" title={day.notes}>
+                  {day.notes}</p>
+              )}
+            </div>
+            <div className="mt-2 space-y-1">
+              {day.shifts.map((s) => (
+                <div key={s.id} className="rounded bg-card/50 px-1.5 py-1 text-[10px]">
+                  <span className="text-cyan-400">{slotLabel(s)}</span>
+                  <span className="ml-1 text-cyan-200">
+                    {s.assignmentUserIds?.length > 0
+                      ? s.assignmentUserIds.map(displayName).join(", ")
+                      : "–"}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+      </>
+    );
+  };
 
   return (
     <>
@@ -134,58 +202,69 @@ export default function ShiftPlanWeekNav({
         </button>
       </div>
 
-      <div className="mt-3 grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2 min-w-0">
+      {/* Mobil: nur ein Tag, mit Pfeilen zum Wechseln */}
+      <div className="mt-3 md:hidden">
+        <div className="flex items-center gap-3 mb-2">
+          <button
+            type="button"
+            onClick={() => setDayIndex((i) => Math.max(0, i - 1))}
+            disabled={!canDayLeft}
+            className="rounded-lg border border-cyan-500/40 bg-card/60 p-2 text-cyan-400 hover:bg-cyan-500/20 disabled:opacity-40 disabled:cursor-not-allowed"
+            aria-label="Vorheriger Tag"
+          >
+            ←
+          </button>
+          <span className="flex-1 text-center text-sm font-semibold text-cyan-300">
+            {currentDay && formatDateLabel(currentDay.dateStr, { weekday: "long" })}
+          </span>
+          <button
+            type="button"
+            onClick={() => setDayIndex((i) => Math.min(days.length - 1, i + 1))}
+            disabled={!canDayRight}
+            className="rounded-lg border border-cyan-500/40 bg-card/60 p-2 text-cyan-400 hover:bg-cyan-500/20 disabled:opacity-40 disabled:cursor-not-allowed"
+            aria-label="Nächster Tag"
+          >
+            →
+          </button>
+        </div>
+        {currentDay && (
+          <div
+            role={currentDay.shifts.length > 0 ? "button" : undefined}
+            tabIndex={currentDay.shifts.length > 0 ? 0 : undefined}
+            onClick={() => currentDay.shifts.length > 0 && setOverlayDay(currentDay)}
+            onKeyDown={(e) =>
+              currentDay.shifts.length > 0 && (e.key === "Enter" || e.key === " ") && setOverlayDay(currentDay)
+            }
+            className={`rounded-lg border p-3 flex flex-col text-left relative ${
+              currentDay.dateStr === todayStr
+                ? "border-cyan-400/60 bg-cyan-500/10 ring-1 ring-cyan-400/30"
+                : "border-cyan-500/15 bg-card/40"
+            } ${currentDay.shifts.length > 0 ? "cursor-pointer hover:bg-card/60" : ""}`}
+          >
+            {renderDayCard(currentDay)}
+            {currentDay.shifts.length > 0 && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setExportFormat("png");
+                  setExportDay(currentDay);
+                }}
+                className="absolute top-2 right-2 rounded p-1 text-cyan-400/80 hover:text-cyan-300 hover:bg-cyan-500/20"
+                title="Als Bild herunterladen"
+                aria-label="Als Bild herunterladen"
+              >
+                <DownloadIcon />
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Desktop: Woche als Grid (7 Tage) */}
+      <div className="mt-3 hidden md:grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2 min-w-0">
         {days.map((day) => {
-          const todayStr = getTodayDateString();
-          const isToday = day.dateStr === todayStr;
           const hasShifts = day.shifts.length > 0;
-          const content = (
-            <>
-              <div className="flex items-center gap-2 flex-wrap shrink-0">
-                <p className={`text-[11px] font-semibold ${isToday ? "text-cyan-300" : "text-cyan-400/90"}`}>
-                  {day.weekdayName} {day.dateStr.slice(8, 10)}.{day.dateStr.slice(5, 7)}.
-                </p>
-                {isToday && (
-                  <span className="rounded bg-cyan-500/30 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-cyan-200">
-                    Heute
-                  </span>
-                )}
-              </div>
-              {!hasShifts ? (
-                <p className="mt-1 text-[11px] text-cyan-400/50">–</p>
-              ) : (
-                <>
-                  <div className="mt-1 border-t border-cyan-500/15 pt-1.5 space-y-1">
-                    {day.dayTitle && (
-                      <p className="text-[10px] font-medium text-cyan-200/90 line-clamp-2">
-                        {day.dayTitle}
-                      </p>
-                    )}
-                    {day.location && (
-                      <p className="text-[10px] text-cyan-400/70">Ort: {day.location}</p>
-                    )}
-                    {day.notes && (
-                      <p className="text-[10px] text-cyan-200/70 line-clamp-2" title={day.notes}>
-                        {day.notes}
-                      </p>
-                    )}
-                  </div>
-                  <div className="mt-2 space-y-1">
-                    {day.shifts.map((s) => (
-                      <div key={s.id} className="rounded bg-card/50 px-1.5 py-1 text-[10px]">
-                        <span className="text-cyan-400">{slotLabel(s)}</span>
-                        <span className="ml-1 text-cyan-200">
-                          {s.assignmentUserIds?.length > 0
-                            ? s.assignmentUserIds.map(displayName).join(", ")
-                            : "–"}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </>
-              )}
-            </>
-          );
           return (
             <div
               key={day.dateStr}
@@ -196,12 +275,12 @@ export default function ShiftPlanWeekNav({
                 hasShifts && (e.key === "Enter" || e.key === " ") && setOverlayDay(day)
               }
               className={`min-w-0 rounded border p-2 flex flex-col text-left relative ${
-                isToday
+                day.dateStr === todayStr
                   ? "border-cyan-400/60 bg-cyan-500/10 ring-1 ring-cyan-400/30"
                   : "border-cyan-500/15 bg-card/40"
               } ${hasShifts ? "cursor-pointer hover:bg-card/60 focus:outline-none focus:ring-1 focus:ring-cyan-400/50" : ""}`}
             >
-              {content}
+              {renderDayCard(day)}
               {hasShifts && (
                 <button
                   type="button"

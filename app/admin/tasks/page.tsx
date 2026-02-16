@@ -6,6 +6,8 @@ import { createSupabaseServiceRoleClient } from "../../../lib/supabaseServer";
 import CopyTaskLinkButton from "../../../components/CopyTaskLinkButton";
 import SubmitButtonWithSpinner from "../../../components/SubmitButtonWithSpinner";
 
+export const dynamic = "force-dynamic";
+
 const STATUS_COLUMNS = [
   { key: "offen", label: "Offen" },
   { key: "in_arbeit", label: "In Arbeit" },

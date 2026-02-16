@@ -3,6 +3,8 @@ import { createServerComponentClient } from "@supabase/auth-helpers-nextjs";
 import TreasuryUploadForm from "../../../components/TreasuryUploadForm";
 import { createSupabaseServiceRoleClient } from "../../../lib/supabaseServer";
 
+export const dynamic = "force-dynamic";
+
 export default async function TreasuryPage() {
   const supabase = createServerComponentClient({ cookies });
   const {
