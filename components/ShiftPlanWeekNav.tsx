@@ -202,26 +202,31 @@ export default function ShiftPlanWeekNav({
         </button>
       </div>
 
-      {/* Mobil: nur ein Tag, mit Pfeilen zum Wechseln */}
-      <div className="mt-3 md:hidden">
-        <div className="flex items-center gap-3 mb-2">
+      {/* Mobil: nur ein Tag, mit Pfeilen – übersichtliche Einzelansicht */}
+      <div className="mt-4 md:hidden space-y-4">
+        <div className="flex items-center gap-2">
           <button
             type="button"
             onClick={() => setDayIndex((i) => Math.max(0, i - 1))}
             disabled={!canDayLeft}
-            className="rounded-lg border border-cyan-500/40 bg-card/60 p-2 text-cyan-400 hover:bg-cyan-500/20 disabled:opacity-40 disabled:cursor-not-allowed"
+            className="shrink-0 rounded-xl border border-cyan-500/40 bg-card/60 p-3 text-cyan-400 hover:bg-cyan-500/20 disabled:opacity-40 disabled:cursor-not-allowed touch-manipulation"
             aria-label="Vorheriger Tag"
           >
             ←
           </button>
-          <span className="flex-1 text-center text-sm font-semibold text-cyan-300">
-            {currentDay && formatDateLabel(currentDay.dateStr, { weekday: "long" })}
-          </span>
+          <div className="flex-1 min-w-0 text-center">
+            <p className="text-base font-semibold text-cyan-200 truncate">
+              {currentDay && formatDateLabel(currentDay.dateStr, { weekday: "long" })}
+            </p>
+            <p className="text-xs text-cyan-400/80 mt-0.5">
+              {currentDay && `${currentDay.dateStr.slice(8, 10)}.${currentDay.dateStr.slice(5, 7)}.${currentDay.dateStr.slice(0, 4)}`}
+            </p>
+          </div>
           <button
             type="button"
             onClick={() => setDayIndex((i) => Math.min(days.length - 1, i + 1))}
             disabled={!canDayRight}
-            className="rounded-lg border border-cyan-500/40 bg-card/60 p-2 text-cyan-400 hover:bg-cyan-500/20 disabled:opacity-40 disabled:cursor-not-allowed"
+            className="shrink-0 rounded-xl border border-cyan-500/40 bg-card/60 p-3 text-cyan-400 hover:bg-cyan-500/20 disabled:opacity-40 disabled:cursor-not-allowed touch-manipulation"
             aria-label="Nächster Tag"
           >
             →
@@ -235,13 +240,17 @@ export default function ShiftPlanWeekNav({
             onKeyDown={(e) =>
               currentDay.shifts.length > 0 && (e.key === "Enter" || e.key === " ") && setOverlayDay(currentDay)
             }
-            className={`rounded-lg border p-3 flex flex-col text-left relative ${
+            className={`rounded-xl border-2 p-4 flex flex-col text-left relative ${
               currentDay.dateStr === todayStr
-                ? "border-cyan-400/60 bg-cyan-500/10 ring-1 ring-cyan-400/30"
-                : "border-cyan-500/15 bg-card/40"
-            } ${currentDay.shifts.length > 0 ? "cursor-pointer hover:bg-card/60" : ""}`}
+                ? "border-cyan-400/70 bg-cyan-500/15 ring-2 ring-cyan-400/25"
+                : "border-cyan-500/25 bg-card/50"
+            } ${currentDay.shifts.length > 0 ? "cursor-pointer active:bg-card/70" : ""}`}
           >
-            {renderDayCard(currentDay)}
+            {currentDay.dateStr === todayStr && (
+              <span className="absolute top-3 right-12 rounded-md bg-cyan-500/30 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-cyan-200">
+                Heute
+              </span>
+            )}
             {currentDay.shifts.length > 0 && (
               <button
                 type="button"
@@ -250,12 +259,56 @@ export default function ShiftPlanWeekNav({
                   setExportFormat("png");
                   setExportDay(currentDay);
                 }}
-                className="absolute top-2 right-2 rounded p-1 text-cyan-400/80 hover:text-cyan-300 hover:bg-cyan-500/20"
+                className="absolute top-3 right-3 rounded-lg p-2 text-cyan-400/90 hover:text-cyan-300 hover:bg-cyan-500/20 touch-manipulation"
                 title="Als Bild herunterladen"
                 aria-label="Als Bild herunterladen"
               >
                 <DownloadIcon />
               </button>
+            )}
+
+            {!currentDay.shifts.length ? (
+              <p className="text-sm text-cyan-400/70 py-2">Keine Schichten eingetragen.</p>
+            ) : (
+              <div className="space-y-4">
+                {(currentDay.dayTitle || currentDay.location || currentDay.notes) && (
+                  <div className="space-y-1.5 pb-3 border-b border-cyan-500/20">
+                    {currentDay.dayTitle && (
+                      <p className="text-sm font-medium text-cyan-200">{currentDay.dayTitle}</p>
+                    )}
+                    {currentDay.location && (
+                      <p className="text-xs text-cyan-400/90">📍 {currentDay.location}</p>
+                    )}
+                    {currentDay.notes && (
+                      <p className="text-xs text-cyan-300/80 leading-snug" title={currentDay.notes}>
+                        {currentDay.notes}
+                      </p>
+                    )}
+                  </div>
+                )}
+                <div>
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-cyan-400/90 mb-2">
+                    Schichten
+                  </p>
+                  <ul className="space-y-2">
+                    {currentDay.shifts.map((s) => (
+                      <li
+                        key={s.id}
+                        className="flex flex-col gap-0.5 rounded-lg bg-card/60 border border-cyan-500/15 px-3 py-2.5"
+                      >
+                        <span className="text-xs font-semibold text-cyan-300">
+                          {slotLabel(s)}
+                        </span>
+                        <span className="text-sm text-cyan-100">
+                          {s.assignmentUserIds?.length > 0
+                            ? s.assignmentUserIds.map(displayName).join(", ")
+                            : "–"}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
             )}
           </div>
         )}
