@@ -49,7 +49,7 @@ async function createTask(formData: FormData) {
     description,
     committee_id: committeeId || null,
     owner_id: ownerId || null,
-    created_by: user.id,
+    created_by: profile.id,
     due_at: dueAt ? new Date(dueAt).toISOString() : null,
     proof_required: proofRequired,
     access_token: token
