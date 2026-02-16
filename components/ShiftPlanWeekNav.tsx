@@ -123,8 +123,9 @@ export default function ShiftPlanWeekNav({
 
   const { weekLabel, days } = week;
   const currentDay = days[Math.max(0, Math.min(dayIndex, days.length - 1))];
-  const canDayLeft = dayIndex > 0;
-  const canDayRight = dayIndex < days.length - 1;
+  const lastDayIndex = days.length - 1;
+  const canDayLeft = dayIndex > 0 || (dayIndex === 0 && canGoLeft);
+  const canDayRight = dayIndex < lastDayIndex || (dayIndex === lastDayIndex && canGoRight);
 
   const renderDayCard = (day: DayData) => {
     const isToday = day.dateStr === todayStr;
@@ -207,7 +208,13 @@ export default function ShiftPlanWeekNav({
         <div className="flex items-center gap-2">
           <button
             type="button"
-            onClick={() => setDayIndex((i) => Math.max(0, i - 1))}
+            onClick={() => {
+              if (dayIndex > 0) setDayIndex((i) => i - 1);
+              else if (canGoLeft) {
+                setWeekIndex((i) => i - 1);
+                setDayIndex(lastDayIndex);
+              }
+            }}
             disabled={!canDayLeft}
             className="shrink-0 rounded-xl border border-cyan-500/40 bg-card/60 p-3 text-cyan-400 hover:bg-cyan-500/20 disabled:opacity-40 disabled:cursor-not-allowed touch-manipulation"
             aria-label="Vorheriger Tag"
@@ -224,7 +231,13 @@ export default function ShiftPlanWeekNav({
           </div>
           <button
             type="button"
-            onClick={() => setDayIndex((i) => Math.min(days.length - 1, i + 1))}
+            onClick={() => {
+              if (dayIndex < lastDayIndex) setDayIndex((i) => i + 1);
+              else if (canGoRight) {
+                setWeekIndex((i) => i + 1);
+                setDayIndex(0);
+              }
+            }}
             disabled={!canDayRight}
             className="shrink-0 rounded-xl border border-cyan-500/40 bg-card/60 p-3 text-cyan-400 hover:bg-cyan-500/20 disabled:opacity-40 disabled:cursor-not-allowed touch-manipulation"
             aria-label="Nächster Tag"
