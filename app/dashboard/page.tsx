@@ -137,29 +137,31 @@ export default async function DashboardPage() {
         </div>
       </section>
 
-      <section className="mb-2">
-        <h2 className="mb-2 text-sm font-semibold text-cyan-400">
-          Livecharts pro Komitee
-        </h2>
-        <div className="grid grid-cols-4 gap-2 sm:grid-cols-5 md:grid-cols-6 lg:grid-cols-7">
-          {livechartCommittees.map((c) => (
-            <div
-              key={c.id}
-              className="h-16 min-w-0 rounded border border-cyan-500/20 bg-card/40 flex flex-col items-center justify-center px-1.5 py-1 text-center"
-            >
-              <span className="truncate w-full text-[10px] font-semibold text-cyan-400" title={c.name}>
-                {c.name}
-              </span>
-              <span className="text-[9px] text-cyan-400/50">Chart</span>
-            </div>
-          ))}
-          {livechartCommittees.length === 0 && (
-            <p className="col-span-full py-2 text-xs text-cyan-400/70">
-              Noch keine Komitees angelegt.
-            </p>
-          )}
-        </div>
-      </section>
+      {false && (
+        <section className="mb-2">
+          <h2 className="mb-2 text-sm font-semibold text-cyan-400">
+            Livecharts pro Komitee
+          </h2>
+          <div className="grid grid-cols-4 gap-2 sm:grid-cols-5 md:grid-cols-6 lg:grid-cols-7">
+            {livechartCommittees.map((c) => (
+              <div
+                key={c.id}
+                className="h-16 min-w-0 rounded border border-cyan-500/20 bg-card/40 flex flex-col items-center justify-center px-1.5 py-1 text-center"
+              >
+                <span className="truncate w-full text-[10px] font-semibold text-cyan-400" title={c.name}>
+                  {c.name}
+                </span>
+                <span className="text-[9px] text-cyan-400/50">Chart</span>
+              </div>
+            ))}
+            {livechartCommittees.length === 0 && (
+              <p className="col-span-full py-2 text-xs text-cyan-400/70">
+                Noch keine Komitees angelegt.
+              </p>
+            )}
+          </div>
+        </section>
+      )}
 
       <section className="card">
         <h2 className="mb-4 text-sm font-semibold text-cyan-400">
