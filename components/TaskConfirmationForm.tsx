@@ -44,7 +44,12 @@ export default function TaskConfirmationForm({
     setLoading(false);
 
     if (!res.ok) {
-      setMessage(data.message || "Aktualisierung fehlgeschlagen.");
+      const detail = (data as { detail?: string }).detail;
+      setMessage(
+        detail
+          ? `${data.message || "Aktualisierung fehlgeschlagen."} (${detail})`
+          : data.message || "Aktualisierung fehlgeschlagen."
+      );
       return;
     }
 

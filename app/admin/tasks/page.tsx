@@ -2,9 +2,11 @@ import { cookies } from "next/headers";
 import { createServerComponentClient } from "@supabase/auth-helpers-nextjs";
 import Link from "next/link";
 import { revalidatePath } from "next/cache";
+import { Suspense } from "react";
 import { createSupabaseServiceRoleClient } from "../../../lib/supabaseServer";
 import CopyTaskLinkButton from "../../../components/CopyTaskLinkButton";
 import SubmitButtonWithSpinner from "../../../components/SubmitButtonWithSpinner";
+import CommitteeFilter from "../../../components/CommitteeFilter";
 
 export const dynamic = "force-dynamic";
 
@@ -23,7 +25,14 @@ async function deleteTask(formData: FormData) {
   revalidatePath("/admin/tasks");
 }
 
-export default async function AdminTasksPage() {
+type PageProps = { searchParams?: Promise<{ committee?: string }> | { committee?: string } };
+
+export default async function AdminTasksPage(props: PageProps) {
+  const raw = props.searchParams;
+  const searchParams = raw && typeof (raw as Promise<unknown>).then === "function"
+    ? await (raw as Promise<{ committee?: string }>)
+    : (raw ?? {}) as { committee?: string };
+  const committeeId = searchParams?.committee?.trim() || null;
   const supabase = createServerComponentClient({ cookies });
   const {
     data: { user }
@@ -70,12 +79,25 @@ export default async function AdminTasksPage() {
     (profiles ?? []).map((p: { id: string; full_name: string }) => [p.id, p.full_name])
   );
 
+  const committeesForFilter = (committees ?? []).filter(
+    (c: { name?: string | null }) => !/Jahrgangssprecher/i.test(String(c.name ?? ""))
+  );
+
+  const tasksFiltered = committeeId
+    ? (tasks ?? []).filter((t: { committee_id?: string | null }) => t.committee_id === committeeId)
+    : (tasks ?? []);
+
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h2 className="text-sm font-semibold text-cyan-400">
-          Aufgaben & Kanban
-        </h2>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-4">
+          <h2 className="text-sm font-semibold text-cyan-400">
+            Aufgaben & Kanban
+          </h2>
+          <Suspense fallback={<span className="text-[10px] text-cyan-400/60">Komitee …</span>}>
+            <CommitteeFilter committees={committeesForFilter} />
+          </Suspense>
+        </div>
         <Link href="/admin/tasks/new" className="btn-primary text-xs">
           Neue Aufgabe anlegen
         </Link>
@@ -89,12 +111,12 @@ export default async function AdminTasksPage() {
                 {col.label}
               </h3>
               <span className="text-[10px] text-cyan-400/70">
-                {tasks?.filter((t) => t.status === col.key).length ?? 0} Aufgaben
+                {tasksFiltered.filter((t) => t.status === col.key).length} Aufgaben
               </span>
             </div>
             <div className="space-y-2 text-xs">
-              {tasks
-                ?.filter((t) => t.status === col.key)
+              {tasksFiltered
+                .filter((t) => t.status === col.key)
                 .map((t) => (
                   <article
                     key={t.id}
@@ -171,7 +193,7 @@ export default async function AdminTasksPage() {
                     </div>
                   </article>
                 ))}
-              {(!tasks?.filter((t) => t.status === col.key).length) && (
+              {!tasksFiltered.filter((t) => t.status === col.key).length && (
                 <p className="text-[11px] text-cyan-400/60">
                   Keine Aufgaben in dieser Spalte.
                 </p>

@@ -1,5 +1,5 @@
 import { cookies } from "next/headers";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, unstable_noStore } from "next/cache";
 import { createServerComponentClient } from "@supabase/auth-helpers-nextjs";
 import { createSupabaseServiceRoleClient } from "../../../lib/supabaseServer";
 import { removePastShifts } from "../../../lib/cleanupShifts";
@@ -303,8 +303,41 @@ async function updateShift(shiftId: string, formData: FormData) {
 
   if (!error) {
     revalidatePath("/admin/shifts");
-    revalidatePath("/dashboard");
+    revalidatePath("/dashboard", "layout");
   }
+}
+
+/** Veranstaltung bearbeiten: erste Schicht voll, alle Schichten der Gruppe bekommen Ort + Infos (Dashboard zeigt aktualisierte Infos). */
+async function updateEventGroup(shiftIds: string[], formData: FormData) {
+  "use server";
+  const eventName = formData.get("event_name")?.toString().trim();
+  const date = formData.get("date")?.toString();
+  const startTime = formData.get("start_time")?.toString();
+  const endTime = formData.get("end_time")?.toString();
+  const location = formData.get("location")?.toString().trim() || null;
+  const notes = formData.get("notes")?.toString().trim() || null;
+  if (!eventName || !date || !startTime || !endTime || !shiftIds?.length) return;
+
+  const service = createSupabaseServiceRoleClient();
+  const [firstId, ...restIds] = shiftIds;
+  const { error: errFirst } = await service
+    .from("shifts")
+    .update({
+      event_name: eventName,
+      date,
+      start_time: startTime,
+      end_time: endTime,
+      location,
+      notes
+    })
+    .eq("id", firstId);
+  if (errFirst) return;
+
+  for (const id of restIds) {
+    await service.from("shifts").update({ location, notes }).eq("id", id);
+  }
+  revalidatePath("/admin/shifts");
+  revalidatePath("/dashboard", "layout");
 }
 
 async function removeAssignment(assignmentId: string) {
@@ -336,6 +369,102 @@ async function replaceAssignment(assignmentId: string, formData: FormData) {
     revalidatePath("/admin/shifts");
     revalidatePath("/dashboard");
   }
+}
+
+const SHIFT_DONE_POINTS = 10;
+const REPLACEMENT_ARRANGED_POINTS = 4; // Weniger als Schicht selbst, da Ersatz besorgt
+const SHIFT_MISSED_PENALTY = -15; // Nicht angetreten, kein Ersatz (kein Becheid)
+
+/** Zugewiesene Person ist angetreten → Status erledigt, Trigger vergibt shift_done. */
+async function markAssignmentAttended(assignmentId: string) {
+  "use server";
+  const service = createSupabaseServiceRoleClient();
+  const { error } = await service
+    .from("shift_assignments")
+    .update({ status: "erledigt" })
+    .eq("id", assignmentId);
+  if (!error) {
+    revalidatePath("/admin/shifts");
+    revalidatePath("/dashboard");
+  }
+}
+
+/** Zugewiesene Person nicht angetreten. Mit Ersatz: Original +weniger Punkte (Ersatz besorgt), Ersatz +volle Punkte. Ohne Ersatz: Abzug (kein Becheid). */
+async function markAssignmentNotAttended(
+  assignmentId: string,
+  replacementUserId: string | null
+) {
+  "use server";
+  const service = createSupabaseServiceRoleClient();
+  const { data: assignment } = await service
+    .from("shift_assignments")
+    .select("user_id")
+    .eq("id", assignmentId)
+    .single();
+  if (!assignment?.user_id) return;
+
+  const { error: updateErr } = await service
+    .from("shift_assignments")
+    .update({
+      status: "abgesagt",
+      replacement_user_id: replacementUserId || null
+    })
+    .eq("id", assignmentId);
+  if (updateErr) return;
+
+  const originalUserId = assignment.user_id as string;
+  if (replacementUserId) {
+    await service.from("engagement_events").insert({ user_id: originalUserId, event_type: "replacement_arranged", points: REPLACEMENT_ARRANGED_POINTS, source_id: assignmentId });
+    await service.from("engagement_events").insert({ user_id: replacementUserId, event_type: "shift_done", points: SHIFT_DONE_POINTS, source_id: assignmentId });
+  } else {
+    await service.from("engagement_events").insert({
+      user_id: originalUserId,
+      event_type: "shift_missed",
+      points: SHIFT_MISSED_PENALTY,
+      source_id: assignmentId
+    });
+  }
+  revalidatePath("/admin/shifts");
+  revalidatePath("/dashboard");
+}
+
+/** Status nachträglich ändern (z. B. von erledigt auf nicht angetreten). Entfernt alte Engagement-Einträge, setzt neuen Status, Trigger/App setzen Scores. */
+async function updateAssignmentStatus(
+  assignmentId: string,
+  status: "erledigt" | "abgesagt",
+  replacementUserId: string | null
+) {
+  "use server";
+  const service = createSupabaseServiceRoleClient();
+  const { data: assignment } = await service
+    .from("shift_assignments")
+    .select("user_id")
+    .eq("id", assignmentId)
+    .single();
+  if (!assignment?.user_id) return;
+
+  await service.from("engagement_events").delete().eq("source_id", assignmentId);
+
+  const { error: updateErr } = await service
+    .from("shift_assignments")
+    .update({
+      status,
+      replacement_user_id: status === "abgesagt" ? replacementUserId : null
+    })
+    .eq("id", assignmentId);
+  if (updateErr) return;
+
+  const originalUserId = assignment.user_id as string;
+  if (status === "abgesagt") {
+    if (replacementUserId) {
+      await service.from("engagement_events").insert({ user_id: originalUserId, event_type: "replacement_arranged", points: REPLACEMENT_ARRANGED_POINTS, source_id: assignmentId });
+      await service.from("engagement_events").insert({ user_id: replacementUserId, event_type: "shift_done", points: SHIFT_DONE_POINTS, source_id: assignmentId });
+    } else {
+      await service.from("engagement_events").insert({ user_id: originalUserId, event_type: "shift_missed", points: SHIFT_MISSED_PENALTY, source_id: assignmentId });
+    }
+  }
+  revalidatePath("/admin/shifts");
+  revalidatePath("/dashboard");
 }
 
 async function deleteShift(formData: FormData) {
@@ -376,6 +505,7 @@ async function deleteEventShifts(formData: FormData) {
 }
 
 export default async function ShiftsPage() {
+  unstable_noStore();
   const supabase = createServerComponentClient({ cookies });
   const {
     data: { user }
@@ -407,6 +537,10 @@ export default async function ShiftsPage() {
 
   await removePastShifts(service);
 
+  const todayStr = new Date().toLocaleDateString("en-CA", {
+    timeZone: "Europe/Berlin"
+  });
+
   const [
     { data: shiftsRaw, error: shiftsError },
     { data: assignmentsRaw },
@@ -417,7 +551,9 @@ export default async function ShiftsPage() {
       .from("shifts")
       .select("id, event_name, date, start_time, end_time, location, notes")
       .order("date", { ascending: true }),
-    service.from("shift_assignments").select("id, shift_id, status, user_id"),
+    service
+      .from("shift_assignments")
+      .select("id, shift_id, status, user_id, replacement_user_id"),
     service.from("profiles").select("id, full_name").order("full_name"),
     service.from("user_counters").select("user_id, load_index, responsibility_malus")
   ]);
@@ -426,7 +562,10 @@ export default async function ShiftsPage() {
     console.error("[admin/shifts] Schichten laden:", shiftsError);
   }
 
-  const assignmentsByShift = new Map<string, { id: string; status: string; user_id: string }[]>();
+  const assignmentsByShift = new Map<
+    string,
+    { id: string; status: string; user_id: string; replacement_user_id: string | null }[]
+  >();
   for (const a of assignmentsRaw ?? []) {
     const sid = (a as { shift_id: string }).shift_id;
     if (!sid) continue;
@@ -434,7 +573,8 @@ export default async function ShiftsPage() {
     assignmentsByShift.get(sid)!.push({
       id: (a as { id: string }).id,
       status: (a as { status: string }).status ?? "zugewiesen",
-      user_id: (a as { user_id: string }).user_id ?? ""
+      user_id: (a as { user_id: string }).user_id ?? "",
+      replacement_user_id: (a as { replacement_user_id?: string }).replacement_user_id ?? null
     });
   }
   const shifts = (shiftsRaw ?? []).map((s: Record<string, unknown>) => ({
@@ -469,46 +609,42 @@ export default async function ShiftsPage() {
       <h2 className="text-sm font-semibold text-cyan-400">
         Schichten & Auto-Zuteilung
       </h2>
-      <section className="card space-y-3 text-xs">
-        <h3 className="text-xs font-semibold text-cyan-400">
-          Neue Schichten anlegen
-        </h3>
-        <p className="text-cyan-100/80">
-          Zwei Arten von Schichtplänen:
-          <br />
-          <strong>Pausenverkauf</strong> legt automatisch Schichten für 1. und 2. Pause
-          an, <strong>Veranstaltung</strong> nutzt den angegebenen Zeitrahmen.
+      <section className="card space-y-2 sm:space-y-3 text-xs">
+        <h3 className="text-xs font-semibold text-cyan-400">Neue Schichten</h3>
+        <p className="text-cyan-100/80 text-[11px] hidden sm:block">
+          Pausenverkauf (1. + 2. Pause) oder einzelne Veranstaltung.
         </p>
         <CreateShiftsForm action={createShifts} />
       </section>
-      <section className="card">
-        <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-cyan-400">
-          Schichtplan (nach Tag gebündelt)
-        </h3>
+      <section className="rounded-xl border border-cyan-500/15 bg-card/50 shadow-sm overflow-hidden">
+        <div className="border-b border-cyan-500/15 bg-cyan-500/5 px-4 py-3">
+          <h3 className="text-sm font-semibold text-cyan-300">Schichtplan</h3>
+          <p className="text-[11px] text-cyan-400/70 mt-0.5">Vergangene Schichten: Antreten bestätigen oder Ersatz eintragen.</p>
+        </div>
+        <div className="p-4">
         {shiftsError ? (
-          <p className="text-xs text-red-300">
-            Schichten konnten nicht geladen werden: {shiftsError.message}
-          </p>
+          <p className="text-xs text-red-300">{shiftsError.message}</p>
         ) : (!shifts || shifts.length === 0) ? (
-          <div className="space-y-1 text-xs text-cyan-400/70">
-            <p>Noch keine Schichten angelegt.</p>
-            <p className="text-[11px] text-cyan-400/50">
-              Schichten, die du früher angelegt hattest, können nach Neuaufsetzen der Profile fehlen. Neue Schichten über das Formular oben anlegen.
-            </p>
-          </div>
+          <p className="text-sm text-cyan-400/70">Noch keine Schichten. Formular oben nutzen.</p>
         ) : (
           <ShiftPlanTableWithEdit
             shifts={shifts}
+            todayStr={todayStr}
             profileNames={profileNames}
             membersSortedByLoad={membersSortedByLoad}
             assignToShift={assignToShift}
             deleteShift={deleteShift}
             deleteEventShifts={deleteEventShifts}
             updateShift={updateShift}
+            updateEventGroup={updateEventGroup}
             removeAssignment={removeAssignment}
             replaceAssignment={replaceAssignment}
+            markAssignmentAttended={markAssignmentAttended}
+            markAssignmentNotAttended={markAssignmentNotAttended}
+            updateAssignmentStatus={updateAssignmentStatus}
           />
         )}
+        </div>
       </section>
     </div>
   );

@@ -44,9 +44,12 @@ function parseCommitteeList(val) {
 
 function readRowsFromExcel(filePath) {
   const wb = XLSX.readFile(filePath);
-  const sheet = wb.Sheets["Engagement Overview"];
+  const sheet =
+    wb.Sheets["Engagement Scores"] || wb.Sheets["Engagement Overview"];
   if (!sheet) {
-    throw new Error("Sheet 'Engagement Overview' nicht gefunden.");
+    throw new Error(
+      "Sheet 'Engagement Scores' oder 'Engagement Overview' nicht gefunden."
+    );
   }
   const data = XLSX.utils.sheet_to_json(sheet, { header: 1 });
   const out = new Map();

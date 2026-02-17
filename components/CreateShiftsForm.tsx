@@ -10,7 +10,7 @@ function SubmitButton() {
     <button
       type="submit"
       disabled={pending}
-      className="btn-primary text-xs inline-flex items-center justify-center gap-2 min-w-[180px] disabled:opacity-70 disabled:pointer-events-none"
+      className="btn-primary text-xs inline-flex items-center justify-center gap-2 min-w-[180px] min-h-[44px] sm:min-h-0 disabled:opacity-70 disabled:pointer-events-none touch-manipulation"
     >
       {pending ? (
         <>
@@ -44,7 +44,7 @@ export default function CreateShiftsForm({
   }, [state?.success]);
 
   return (
-    <form action={formAction} className="grid gap-2 md:grid-cols-2">
+    <form action={formAction} className="grid gap-3 sm:gap-2 md:grid-cols-2">
       {state?.error && (
         <p className="md:col-span-2 text-xs text-red-300">{state.error}</p>
       )}
@@ -90,7 +90,7 @@ export default function CreateShiftsForm({
               ? "z.B. Schultag 12.02., Pausenverkauf"
               : "z.B. Abi-Party in der Aula"
           }
-          className="w-full rounded border border-cyan-500/30 bg-card/60 p-2 text-xs"
+          className="w-full rounded border border-cyan-500/30 bg-card/60 p-2.5 sm:p-2 text-xs min-h-[44px] sm:min-h-0"
         />
       </div>
       {type === "event" && (
@@ -99,13 +99,13 @@ export default function CreateShiftsForm({
             <label className="text-[11px] font-semibold text-cyan-400">
               Zeitrahmen
             </label>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <input
                 type="time"
                 name="start_time"
                 defaultValue="09:00"
                 required={type === "event"}
-                className="rounded border border-cyan-500/30 bg-card/60 p-2 text-xs"
+                className="rounded border border-cyan-500/30 bg-card/60 p-2.5 sm:p-2 text-xs min-h-[44px] sm:min-h-0"
               />
               <span className="text-cyan-400/80 text-xs">bis</span>
               <input
@@ -113,7 +113,7 @@ export default function CreateShiftsForm({
                 name="end_time"
                 defaultValue="12:00"
                 required={type === "event"}
-                className="rounded border border-cyan-500/30 bg-card/60 p-2 text-xs"
+                className="rounded border border-cyan-500/30 bg-card/60 p-2.5 sm:p-2 text-xs min-h-[44px] sm:min-h-0"
               />
             </div>
           </div>
@@ -126,7 +126,7 @@ export default function CreateShiftsForm({
             </p>
             <select
               name="interval_minutes"
-              className="w-full rounded border border-cyan-500/30 bg-card/60 p-2 text-xs"
+              className="w-full rounded border border-cyan-500/30 bg-card/60 p-2.5 sm:p-2 text-xs min-h-[44px] sm:min-h-0"
               defaultValue="120"
             >
               <option value="30">30 Minuten</option>
@@ -147,7 +147,7 @@ export default function CreateShiftsForm({
           name="required_slots"
           min={0}
           defaultValue={4}
-          className="w-full rounded border border-cyan-500/30 bg-card/60 p-2 text-xs"
+          className="w-full rounded border border-cyan-500/30 bg-card/60 p-2.5 sm:p-2 text-xs min-h-[44px] sm:min-h-0"
         />
       </div>
       <div className="space-y-1 md:col-span-2">
@@ -155,8 +155,8 @@ export default function CreateShiftsForm({
         <input
           type="text"
           name="location"
-          placeholder="z.B. Mensa, Aula, Pausenhalle …"
-          className="w-full rounded border border-cyan-500/30 bg-card/60 p-2 text-xs"
+          placeholder="z.B. Mensa, Aula …"
+          className="w-full rounded border border-cyan-500/30 bg-card/60 p-2.5 sm:p-2 text-xs min-h-[44px] sm:min-h-0"
         />
       </div>
       <div className="space-y-1 md:col-span-2">
@@ -167,7 +167,7 @@ export default function CreateShiftsForm({
           name="notes"
           rows={3}
           placeholder="z.B. Wer hat die Kasse, was wird verkauft, wichtige Hinweise – werden im Dashboard angezeigt."
-          className="w-full rounded border border-cyan-500/30 bg-card/60 p-2 text-xs resize-y min-h-[60px]"
+          className="w-full rounded border border-cyan-500/30 bg-card/60 p-2.5 sm:p-2 text-xs resize-y min-h-[60px]"
         />
       </div>
       <div className="md:col-span-2 pt-1">

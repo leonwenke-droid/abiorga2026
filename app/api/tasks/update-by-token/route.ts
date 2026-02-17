@@ -59,9 +59,10 @@ export async function POST(req: NextRequest) {
         );
       }
 
+      const pathInBucket = uploadData?.path ?? path;
       const {
         data: { publicUrl }
-      } = supabase.storage.from("task_proofs").getPublicUrl(uploadData.path);
+      } = supabase.storage.from("task_proofs").getPublicUrl(pathInBucket);
 
       proofUrl = publicUrl;
     }
@@ -76,23 +77,28 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    const proofUrlToSet = proofUrl ?? task.proof_url ?? null;
+
     const { error: updateError } = await supabase
       .from("tasks")
       .update({
         status,
-        proof_url: proofUrl
+        proof_url: proofUrlToSet
       })
       .eq("id", task.id);
 
     if (updateError) {
-      console.error(updateError);
+      console.error("tasks update error", updateError);
       return NextResponse.json(
-        { message: "Fehler beim Aktualisieren der Aufgabe." },
+        {
+          message: "Fehler beim Aktualisieren der Aufgabe.",
+          detail: updateError.message
+        },
         { status: 500 }
       );
     }
 
-    if (comment.trim()) {
+    if (comment.trim() && task.owner_id) {
       await supabase.from("engagement_events").insert({
         user_id: task.owner_id,
         event_type: "task_done",
