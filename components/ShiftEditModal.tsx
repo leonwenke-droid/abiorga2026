@@ -46,6 +46,11 @@ function dateForInput(d: string | null | undefined): string {
   return s.slice(0, 10) || "";
 }
 
+/** Basis-Name ohne Schicht-Suffix (z. B. " – 1. Pause") für die Bearbeitung der gesamten Veranstaltung. */
+function baseEventNameForEdit(eventName: string): string {
+  return String(eventName ?? "").trim().replace(/\s*–\s*[12]\.\s*Pause$/i, "").trim() || String(eventName ?? "");
+}
+
 function timeStr(t: string | null | undefined): string {
   const s = String(t ?? "").trim();
   return s.slice(0, 5) || "–";
@@ -81,7 +86,9 @@ export default function ShiftEditModal({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="border-b border-cyan-500/20 bg-card/80 px-3 py-2.5 sm:py-2 flex justify-between items-center shrink-0">
-          <h3 className="text-xs font-semibold text-cyan-400">{personsOnly ? "Personen" : "Schicht bearbeiten"}</h3>
+          <h3 className="text-xs font-semibold text-cyan-400">
+            {personsOnly ? "Personen" : isEventGroup ? "Veranstaltung bearbeiten (alle Schichten)" : "Schicht bearbeiten"}
+          </h3>
           <button
             type="button"
             onClick={onClose}
@@ -110,7 +117,7 @@ export default function ShiftEditModal({
                 type="text"
                 name="event_name"
                 required
-                defaultValue={shift.event_name}
+                defaultValue={isEventGroup ? baseEventNameForEdit(shift.event_name) : shift.event_name}
                 className="w-full rounded border border-cyan-500/30 bg-card/60 p-2.5 sm:p-2 text-xs min-h-[44px] sm:min-h-0"
               />
             </div>
@@ -125,6 +132,7 @@ export default function ShiftEditModal({
                   className="w-full rounded border border-cyan-500/30 bg-card/60 p-2.5 sm:p-2 text-xs min-h-[44px] sm:min-h-0"
                 />
               </div>
+              {!isEventGroup && (
               <div>
                 <label className="text-[10px] font-semibold text-cyan-400 block mb-0.5">Uhrzeit</label>
                 <div className="flex items-center gap-2">
@@ -145,7 +153,14 @@ export default function ShiftEditModal({
                   />
                 </div>
               </div>
+              )}
             </div>
+            {isEventGroup && (
+              <>
+                <input type="hidden" name="start_time" value={timeForInput(shift.start_time)} />
+                <input type="hidden" name="end_time" value={timeForInput(shift.end_time)} />
+              </>
+            )}
             <div>
               <label className="text-[10px] font-semibold text-cyan-400 block mb-0.5">Ort</label>
               <input

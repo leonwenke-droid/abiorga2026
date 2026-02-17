@@ -1,3 +1,5 @@
+import AdminBackLink from "../../components/AdminBackLink";
+
 export const dynamic = "force-dynamic";
 
 export default function AdminLayout({
@@ -5,5 +7,10 @@ export default function AdminLayout({
 }: {
   children: React.ReactNode;
 }) {
-  return <>{children}</>;
+  return (
+    <>
+      <AdminBackLink />
+      {children}
+    </>
+  );
 }

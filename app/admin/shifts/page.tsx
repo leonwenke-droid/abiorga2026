@@ -307,34 +307,57 @@ async function updateShift(shiftId: string, formData: FormData) {
   }
 }
 
-/** Veranstaltung bearbeiten: erste Schicht voll, alle Schichten der Gruppe bekommen Ort + Infos (Dashboard zeigt aktualisierte Infos). */
+/** Erhält Schicht-Suffix (z. B. " – 1. Pause") aus event_name, damit nur der Veranstaltungsname geändert wird. */
+function getEventNameSuffix(eventName: string): string {
+  const i = String(eventName ?? "").trim().indexOf(" – ");
+  return i >= 0 ? String(eventName).slice(i) : "";
+}
+
+/** Veranstaltung bearbeiten: gilt für alle Schichten. Nur der Basis-Name (Veranstaltung) wird geändert, Schichtnamen wie "1. Pause" bleiben. */
 async function updateEventGroup(shiftIds: string[], formData: FormData) {
   "use server";
-  const eventName = formData.get("event_name")?.toString().trim();
+  const newBaseName = formData.get("event_name")?.toString().trim();
   const date = formData.get("date")?.toString();
   const startTime = formData.get("start_time")?.toString();
   const endTime = formData.get("end_time")?.toString();
   const location = formData.get("location")?.toString().trim() || null;
   const notes = formData.get("notes")?.toString().trim() || null;
-  if (!eventName || !date || !startTime || !endTime || !shiftIds?.length) return;
+  if (!newBaseName || !date || !shiftIds?.length) return;
 
   const service = createSupabaseServiceRoleClient();
-  const [firstId, ...restIds] = shiftIds;
+  const { data: shifts } = await service
+    .from("shifts")
+    .select("id, event_name")
+    .in("id", shiftIds);
+  if (!shifts?.length) return;
+
+  const [first, ...rest] = shifts as { id: string; event_name: string }[];
+  const firstPayload: Record<string, unknown> = {
+    event_name: newBaseName + getEventNameSuffix(first.event_name),
+    date,
+    location,
+    notes
+  };
+  if (startTime && endTime) {
+    firstPayload.start_time = startTime;
+    firstPayload.end_time = endTime;
+  }
   const { error: errFirst } = await service
     .from("shifts")
-    .update({
-      event_name: eventName,
-      date,
-      start_time: startTime,
-      end_time: endTime,
-      location,
-      notes
-    })
-    .eq("id", firstId);
+    .update(firstPayload)
+    .eq("id", first.id);
   if (errFirst) return;
 
-  for (const id of restIds) {
-    await service.from("shifts").update({ location, notes }).eq("id", id);
+  for (const s of rest) {
+    await service
+      .from("shifts")
+      .update({
+        event_name: newBaseName + getEventNameSuffix(s.event_name),
+        date,
+        location,
+        notes
+      })
+      .eq("id", s.id);
   }
   revalidatePath("/admin/shifts");
   revalidatePath("/dashboard", "layout");
