@@ -47,8 +47,20 @@ async function getUsersInCooldown(
   );
 }
 
+/** Mischt ein Array zufällig (Fisher-Yates), damit die Schicht-Zuteilung nicht aus der DB vorhersehbar ist. */
+function shuffleArray<T>(arr: T[]): T[] {
+  const out = [...arr];
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [out[i], out[j]] = [out[j], out[i]];
+  }
+  return out;
+}
+
 /**
- * Auto-Zuteilung: Personen mit niedrigstem Engagement-Score werden zuerst eingeteilt.
+ * Auto-Zuteilung: Unter allen infrage kommenden Personen (nicht im Cooldown, noch nicht zugeteilt)
+ * wird zufällig eingeteilt – nicht deterministisch nach Score/Reihenfolge, damit man aus der DB
+ * nicht vorhersehen kann, wer welche Schicht bekommt.
  * globallyUsed verhindert Mehrfach-Zuteilung innerhalb derselben Batch.
  * Cooldown: Wer in den letzten 3 Tagen eine Schicht hatte, wird nicht erneut eingeteilt.
  */
@@ -70,7 +82,6 @@ async function autoAssignForShifts(
     id: p.id as string,
     score: scoreMap.get(p.id as string) ?? 0
   }));
-  membersWithScore.sort((a, b) => a.score - b.score);
 
   const globallyUsed = new Set<string>();
 
@@ -92,12 +103,13 @@ async function autoAssignForShifts(
       (existing ?? []).map((a: any) => a.user_id as string)
     );
 
-    const toAssign = membersWithScore.filter(
+    const eligible = membersWithScore.filter(
       (m) =>
         !alreadyAssigned.has(m.id) &&
         !globallyUsed.has(m.id) &&
         !cooldownUsers.has(m.id)
-    ).slice(0, required);
+    );
+    const toAssign = shuffleArray(eligible).slice(0, required);
 
     if (!toAssign.length) continue;
 

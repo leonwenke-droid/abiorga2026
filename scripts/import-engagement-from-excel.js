@@ -8,11 +8,14 @@
 
 const path = require("path");
 const fs = require("fs");
-const envPath = path.resolve(process.cwd(), ".env");
-if (fs.existsSync(envPath)) {
-  for (const line of fs.readFileSync(envPath, "utf8").split("\n")) {
-    const m = line.match(/^([^#=]+)=(.*)$/);
-    if (m) process.env[m[1].trim()] = m[2].trim().replace(/^["']|["']$/g, "");
+for (const envFile of [".env.local", ".env"]) {
+  const envPath = path.resolve(process.cwd(), envFile);
+  if (fs.existsSync(envPath)) {
+    for (const line of fs.readFileSync(envPath, "utf8").split("\n")) {
+      const m = line.match(/^([^#=]+)=(.*)$/);
+      if (m) process.env[m[1].trim()] = m[2].trim().replace(/^["']|["']$/g, "");
+    }
+    break;
   }
 }
 const XLSX = require("xlsx");
@@ -45,10 +48,12 @@ function parseCommitteeList(val) {
 function readRowsFromExcel(filePath) {
   const wb = XLSX.readFile(filePath);
   const sheet =
-    wb.Sheets["Engagement Scores"] || wb.Sheets["Engagement Overview"];
+    wb.Sheets["Engagement Scores"] ||
+    wb.Sheets["Engagement Overview"] ||
+    (wb.SheetNames && wb.SheetNames[0] ? wb.Sheets[wb.SheetNames[0]] : null);
   if (!sheet) {
     throw new Error(
-      "Sheet 'Engagement Scores' oder 'Engagement Overview' nicht gefunden."
+      "Kein Sheet gefunden (erwartet: 'Engagement Scores', 'Engagement Overview' oder erstes Blatt)."
     );
   }
   const data = XLSX.utils.sheet_to_json(sheet, { header: 1 });
