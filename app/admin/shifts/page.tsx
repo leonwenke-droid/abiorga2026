@@ -47,20 +47,39 @@ async function getUsersInCooldown(
   );
 }
 
-/** Mischt ein Array zufällig (Fisher-Yates), damit die Schicht-Zuteilung nicht aus der DB vorhersehbar ist. */
-function shuffleArray<T>(arr: T[]): T[] {
-  const out = [...arr];
-  for (let i = out.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [out[i], out[j]] = [out[j], out[i]];
+type MemberWithScore = { id: string; score: number };
+
+/**
+ * Wählt ohne Zurücklegen per gewichteter Zufall aus: geringerer Score = höhere Wahrscheinlichkeit.
+ * Gewicht = (maxScore - score + 1), damit niemand 0-Chance hat und die Reihenfolge nicht aus der DB ablesbar ist.
+ */
+function weightedRandomSelect(
+  eligible: MemberWithScore[],
+  count: number
+): MemberWithScore[] {
+  const result: MemberWithScore[] = [];
+  let pool = [...eligible];
+  for (let n = 0; n < count && pool.length > 0; n++) {
+    const maxScore = Math.max(...pool.map((m) => m.score));
+    const weights = pool.map((m) => maxScore - m.score + 1);
+    const totalWeight = weights.reduce((a, b) => a + b, 0);
+    let r = Math.random() * totalWeight;
+    let idx = 0;
+    for (; idx < pool.length; idx++) {
+      r -= weights[idx];
+      if (r <= 0) break;
+    }
+    idx = Math.min(idx, pool.length - 1);
+    result.push(pool[idx]);
+    pool = pool.slice(0, idx).concat(pool.slice(idx + 1));
   }
-  return out;
+  return result;
 }
 
 /**
  * Auto-Zuteilung: Unter allen infrage kommenden Personen (nicht im Cooldown, noch nicht zugeteilt)
- * wird zufällig eingeteilt – nicht deterministisch nach Score/Reihenfolge, damit man aus der DB
- * nicht vorhersehen kann, wer welche Schicht bekommt.
+ * wird per gewichteter Zufall eingeteilt – geringerer Engagement-Score = höhere Wahrscheinlichkeit.
+ * So ist die Einteilung fair (wenig engagierte werden eher dran genommen), aber nicht deterministisch.
  * globallyUsed verhindert Mehrfach-Zuteilung innerhalb derselben Batch.
  * Cooldown: Wer in den letzten 3 Tagen eine Schicht hatte, wird nicht erneut eingeteilt.
  */
@@ -78,7 +97,7 @@ async function autoAssignForShifts(
   const scoreMap = new Map(
     (scores ?? []).map((s) => [s.user_id as string, Number(s.score) ?? 0])
   );
-  const membersWithScore = (profiles ?? []).map((p) => ({
+  const membersWithScore: MemberWithScore[] = (profiles ?? []).map((p) => ({
     id: p.id as string,
     score: scoreMap.get(p.id as string) ?? 0
   }));
@@ -109,7 +128,7 @@ async function autoAssignForShifts(
         !globallyUsed.has(m.id) &&
         !cooldownUsers.has(m.id)
     );
-    const toAssign = shuffleArray(eligible).slice(0, required);
+    const toAssign = weightedRandomSelect(eligible, required);
 
     if (!toAssign.length) continue;
 
