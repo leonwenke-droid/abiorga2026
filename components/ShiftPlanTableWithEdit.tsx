@@ -37,6 +37,17 @@ function timeStr(t: string | null | undefined): string {
   return s.slice(0, 5) || "–";
 }
 
+/** Prüft, ob die Schicht zeitlich begonnen hat (Datum + Startzeit in der Vergangenheit). Ab dann kann Antreten/Ersatz abgefragt werden. */
+function isShiftStarted(shift: { date?: string; start_time?: string }, todayStr: string): boolean {
+  const dateStr = (shift.date ?? "").trim();
+  if (!dateStr) return false;
+  if (dateStr < todayStr) return true;
+  if (dateStr > todayStr) return false;
+  const start = String(shift.start_time ?? "00:00").trim().slice(0, 5);
+  const shiftStart = new Date(`${dateStr}T${start}`);
+  return !isNaN(shiftStart.getTime()) && new Date() >= shiftStart;
+}
+
 export default function ShiftPlanTableWithEdit({
   shifts,
   todayStr,
@@ -70,8 +81,13 @@ export default function ShiftPlanTableWithEdit({
   );
   const dates = Object.keys(byDate).sort();
 
+  /** Gruppiert Schichten zu einer Veranstaltung (z. B. Karnevalsparty – 14:30–15:30 → Karnevalsparty). */
   const eventGroupKey = (eventName: string) =>
-    String(eventName ?? "").trim().replace(/\s*–\s*[12]\.\s*Pause$/i, "").trim() || "—";
+    String(eventName ?? "")
+      .trim()
+      .replace(/\s*–\s*[12]\.\s*Pause$/i, "")
+      .replace(/\s*–\s*\d{1,2}:\d{2}–\d{1,2}:\d{2}$/, "")
+      .trim() || "—";
 
   const byDateAndEvent = (dateStr: string) => {
     const dayShifts = byDate[dateStr] ?? [];
@@ -248,7 +264,7 @@ export default function ShiftPlanTableWithEdit({
                       const names = assignments.map(
                         (a) => profileNames.get(a.user_id ?? "") ?? "?"
                       );
-                      const isPast = (s.date ?? "") < todayStr;
+                      const isPast = isShiftStarted(s, todayStr);
                       const done = assignments.filter((a) => a.status === "erledigt").length;
                       const statusText =
                         done === assignments.length && assignments.length > 0
@@ -303,7 +319,7 @@ export default function ShiftPlanTableWithEdit({
                     const names = assignments.map(
                       (a) => profileNames.get(a.user_id ?? "") ?? "?"
                     );
-                    const isPast = (s.date ?? "") < todayStr;
+                    const isPast = isShiftStarted(s, todayStr);
                     const done = assignments.filter((a) => a.status === "erledigt").length;
                     const statusText =
                       done === assignments.length && assignments.length > 0

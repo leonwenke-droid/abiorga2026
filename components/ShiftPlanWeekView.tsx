@@ -3,12 +3,19 @@
 import { useState } from "react";
 import { formatDateLabel } from "../lib/dateFormat";
 
+export type ShiftAssignment = {
+  id: string;
+  status: string;
+  user_id: string | null;
+  replacement_user_id: string | null;
+};
+
 export type ShiftSlot = {
   id: string;
   event_name: string;
   start_time: string;
   end_time: string;
-  assignmentUserIds: string[];
+  assignments: ShiftAssignment[];
 };
 
 export type DayData = {
@@ -58,6 +65,14 @@ export default function ShiftPlanWeekView({ weeks, profileNames }: Props) {
     return first;
   };
 
+  const renderAssignment = (a: ShiftAssignment) => {
+    const name = a.user_id ? getName(a.user_id) : "–";
+    const replacementName = a.replacement_user_id ? getName(a.replacement_user_id) : null;
+    if (a.status === "erledigt") return <span key={a.id} className="text-[10px] text-green-300/90">✓ {name}</span>;
+    if (a.status === "abgesagt") return <span key={a.id} className="text-[10px]"><span className="text-red-400/90">✗ </span><span className={replacementName ? "text-red-200/80" : "line-through text-cyan-400/50"}>{name}</span>{replacementName && <span className="text-[9px] text-cyan-300/90"> ({replacementName})</span>}</span>;
+    return <span key={a.id} className="text-[10px] text-amber-300/90">{name}</span>;
+  };
+
   return (
     <>
       <div className="flex flex-col gap-8">
@@ -103,11 +118,11 @@ export default function ShiftPlanWeekView({ weeks, profileNames }: Props) {
                               className="rounded bg-card/50 px-1.5 py-1 text-[10px]"
                             >
                               <span className="text-cyan-400">{slotLabel(s)}</span>
-                              <span className="ml-1 text-cyan-200">
-                                {s.assignmentUserIds?.length > 0
-                                  ? s.assignmentUserIds.map(getName).join(", ")
+                              <div className="mt-0.5 ml-1 flex flex-wrap gap-x-1.5 gap-y-0.5 text-cyan-200 [&>span]:after:content-['·'] [&>span]:after:ml-1 [&>span]:after:text-cyan-500/60 [&>span:last-child]:after:content-none [&>span:last-child]:after:ml-0">
+                                {s.assignments?.length > 0
+                                  ? s.assignments.map(renderAssignment)
                                   : "–"}
-                              </span>
+                              </div>
                             </div>
                           ))}
                         </div>
@@ -185,11 +200,17 @@ export default function ShiftPlanWeekView({ weeks, profileNames }: Props) {
                       <span className="font-medium text-cyan-300">
                         {slotLabelDetail(s)}
                       </span>
-                      <p className="mt-1 text-cyan-200/90">
-                        {s.assignmentUserIds?.length > 0
-                          ? s.assignmentUserIds.map((id) => profileNames[id] ?? id).join(", ")
+                      <div className="mt-1 flex flex-wrap gap-x-2 gap-y-0.5 text-cyan-200/90 text-xs">
+                        {s.assignments?.length > 0
+                          ? s.assignments.map((a) => {
+                              const name = a.user_id ? (profileNames[a.user_id] ?? a.user_id) : "–";
+                              const rep = a.replacement_user_id ? (profileNames[a.replacement_user_id] ?? a.replacement_user_id) : null;
+                              if (a.status === "erledigt") return <span key={a.id}>✓ {name}</span>;
+                              if (a.status === "abgesagt") return <span key={a.id}>✗ <span className={rep ? "" : "line-through opacity-60"}>{name}</span>{rep ? <span className="opacity-90"> ({rep})</span> : null}</span>;
+                              return <span key={a.id}>{name}</span>;
+                            })
                           : "–"}
-                      </p>
+                      </div>
                     </li>
                   ))}
                 </ul>

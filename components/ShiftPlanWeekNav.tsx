@@ -2,8 +2,42 @@
 
 import { useRef, useState, useEffect } from "react";
 import html2canvas from "html2canvas";
-import type { WeekData, DayData, ShiftSlot } from "./ShiftPlanWeekView";
+import type { WeekData, DayData, ShiftSlot, ShiftAssignment } from "./ShiftPlanWeekView";
 import { formatDateLabel, getTodayDateString } from "../lib/dateFormat";
+
+function formatAssignments(
+  assignments: ShiftAssignment[] | undefined,
+  profileNames: Record<string, string>
+): React.ReactNode {
+  if (!assignments?.length) return "–";
+  return (
+    <span className="inline-flex flex-wrap gap-x-1.5 gap-y-0.5 text-[10px]">
+      {assignments.map((a, i) => {
+        const name = a.user_id ? (profileNames[a.user_id] ?? "–") : "–";
+        const rep = a.replacement_user_id ? (profileNames[a.replacement_user_id] ?? "–") : null;
+        let inner: React.ReactNode;
+        if (a.status === "erledigt") inner = <span className="text-green-300/90">✓ {name}</span>;
+        else if (a.status === "abgesagt") inner = <><span className="text-red-400/90">✗ </span><span className={rep ? "text-red-200/80" : "line-through text-cyan-400/50"}>{name}</span>{rep ? <span className="text-cyan-300/90"> ({rep})</span> : null}</>;
+        else inner = <span className="text-amber-300/90">{name}</span>;
+        return <span key={a.id}>{i > 0 && <span className="text-cyan-500/50 mx-0.5">·</span>}{inner}</span>;
+      })}
+    </span>
+  );
+}
+
+function formatAssignmentsPlain(
+  assignments: ShiftAssignment[] | undefined,
+  profileNames: Record<string, string>
+): string {
+  if (!assignments?.length) return "–";
+  return assignments.map((a) => {
+    const name = a.user_id ? (profileNames[a.user_id] ?? "–") : "–";
+    const rep = a.replacement_user_id ? (profileNames[a.replacement_user_id] ?? "–") : null;
+    if (a.status === "erledigt") return `✓ ${name}`;
+    if (a.status === "abgesagt") return rep ? `✗ ${name} (${rep})` : `✗ ${name}`;
+    return name;
+  }).join(" · ");
+}
 
 function downloadCanvas(canvas: HTMLCanvasElement, dateStr: string, format: "png" | "jpeg") {
   const mime = format === "png" ? "image/png" : "image/jpeg";
@@ -79,8 +113,6 @@ export default function ShiftPlanWeekNav({
     const idx = w.days.findIndex((d) => d.dateStr === todayStr);
     setDayIndex((prev) => (idx >= 0 ? idx : Math.min(prev, w.days.length - 1)));
   }, [weekIndex, weeks, todayStr]);
-
-  const displayName = (userId: string) => profileNames[userId] ?? "–";
 
   useEffect(() => {
     if (!exportDay) return;
@@ -163,11 +195,11 @@ export default function ShiftPlanWeekNav({
               {day.shifts.map((s) => (
                 <div key={s.id} className="rounded bg-card/50 px-1.5 py-1 text-[10px]">
                   <span className="text-cyan-400">{slotLabel(s)}</span>
-                  <span className="ml-1 text-cyan-200">
-                    {s.assignmentUserIds?.length > 0
-                      ? s.assignmentUserIds.map(displayName).join(", ")
+                  <div className="ml-1 text-cyan-200">
+                    {s.assignments?.length > 0
+                      ? formatAssignments(s.assignments, profileNames)
                       : "–"}
-                  </span>
+                  </div>
                 </div>
               ))}
             </div>
@@ -312,11 +344,11 @@ export default function ShiftPlanWeekNav({
                         <span className="text-xs font-semibold text-cyan-300">
                           {slotLabel(s)}
                         </span>
-                        <span className="text-sm text-cyan-100">
-                          {s.assignmentUserIds?.length > 0
-                            ? s.assignmentUserIds.map(displayName).join(", ")
+                        <div className="text-sm text-cyan-100">
+                          {s.assignments?.length > 0
+                            ? formatAssignments(s.assignments, profileNames)
                             : "–"}
-                        </span>
+                        </div>
                       </li>
                     ))}
                   </ul>
@@ -439,9 +471,7 @@ export default function ShiftPlanWeekNav({
                     >
                       <span className="font-medium text-cyan-300">{slotLabelDetail(s)}</span>
                       <p className="mt-1 text-cyan-200/90">
-                        {s.assignmentUserIds?.length > 0
-                          ? s.assignmentUserIds.map((id) => profileNames[id] ?? "–").join(", ")
-                          : "–"}
+                        {formatAssignmentsPlain(s.assignments, profileNames)}
                       </p>
                     </li>
                   ))}
@@ -482,9 +512,7 @@ export default function ShiftPlanWeekNav({
                 >
                   <span className="font-medium text-cyan-300">{slotLabelDetail(s)}</span>
                   <p className="mt-1 text-cyan-200/90">
-                    {s.assignmentUserIds?.length > 0
-                      ? s.assignmentUserIds.map((id) => profileNames[id] ?? "–").join(", ")
-                      : "–"}
+                    {formatAssignmentsPlain(s.assignments, profileNames)}
                   </p>
                 </li>
               ))}

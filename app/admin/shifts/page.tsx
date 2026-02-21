@@ -5,6 +5,7 @@ import { createSupabaseServiceRoleClient } from "../../../lib/supabaseServer";
 import { removePastShifts } from "../../../lib/cleanupShifts";
 import CreateShiftsForm from "../../../components/CreateShiftsForm";
 import ShiftPlanTableWithEdit from "../../../components/ShiftPlanTableWithEdit";
+import ShiftAttendancePdfExport from "../../../components/ShiftAttendancePdfExport";
 
 export const dynamic = "force-dynamic";
 
@@ -426,7 +427,6 @@ async function replaceAssignment(assignmentId: string, formData: FormData) {
 }
 
 const SHIFT_DONE_POINTS = 10;
-const REPLACEMENT_ARRANGED_POINTS = 4; // Weniger als Schicht selbst, da Ersatz besorgt
 const SHIFT_MISSED_PENALTY = -15; // Nicht angetreten, kein Ersatz (kein Becheid)
 
 /** Zugewiesene Person ist angetreten → Status erledigt, Trigger vergibt shift_done. */
@@ -443,7 +443,7 @@ async function markAssignmentAttended(assignmentId: string) {
   }
 }
 
-/** Zugewiesene Person nicht angetreten. Mit Ersatz: Original +weniger Punkte (Ersatz besorgt), Ersatz +volle Punkte. Ohne Ersatz: Abzug (kein Becheid). */
+/** Zugewiesene Person nicht angetreten. Mit Ersatz: Original keine Punkte, Ersatz +volle Punkte. Ohne Ersatz: Abzug (kein Becheid). */
 async function markAssignmentNotAttended(
   assignmentId: string,
   replacementUserId: string | null
@@ -468,7 +468,6 @@ async function markAssignmentNotAttended(
 
   const originalUserId = assignment.user_id as string;
   if (replacementUserId) {
-    await service.from("engagement_events").insert({ user_id: originalUserId, event_type: "replacement_arranged", points: REPLACEMENT_ARRANGED_POINTS, source_id: assignmentId });
     await service.from("engagement_events").insert({ user_id: replacementUserId, event_type: "shift_done", points: SHIFT_DONE_POINTS, source_id: assignmentId });
   } else {
     await service.from("engagement_events").insert({
@@ -511,7 +510,6 @@ async function updateAssignmentStatus(
   const originalUserId = assignment.user_id as string;
   if (status === "abgesagt") {
     if (replacementUserId) {
-      await service.from("engagement_events").insert({ user_id: originalUserId, event_type: "replacement_arranged", points: REPLACEMENT_ARRANGED_POINTS, source_id: assignmentId });
       await service.from("engagement_events").insert({ user_id: replacementUserId, event_type: "shift_done", points: SHIFT_DONE_POINTS, source_id: assignmentId });
     } else {
       await service.from("engagement_events").insert({ user_id: originalUserId, event_type: "shift_missed", points: SHIFT_MISSED_PENALTY, source_id: assignmentId });
@@ -671,9 +669,17 @@ export default async function ShiftsPage() {
         <CreateShiftsForm action={createShifts} />
       </section>
       <section className="rounded-xl border border-cyan-500/15 bg-card/50 shadow-sm overflow-hidden">
-        <div className="border-b border-cyan-500/15 bg-cyan-500/5 px-4 py-3">
-          <h3 className="text-sm font-semibold text-cyan-300">Schichtplan</h3>
-          <p className="text-[11px] text-cyan-400/70 mt-0.5">Vergangene Schichten: Antreten bestätigen oder Ersatz eintragen.</p>
+        <div className="border-b border-cyan-500/15 bg-cyan-500/5 px-4 py-3 flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h3 className="text-sm font-semibold text-cyan-300">Schichtplan</h3>
+            <p className="text-[11px] text-cyan-400/70 mt-0.5">Vergangene Schichten: Antreten bestätigen oder Ersatz eintragen.</p>
+          </div>
+          {shifts && shifts.length > 0 && (
+            <ShiftAttendancePdfExport
+              shifts={shifts}
+              profileNames={Object.fromEntries(profileNames)}
+            />
+          )}
         </div>
         <div className="p-4">
         {shiftsError ? (
