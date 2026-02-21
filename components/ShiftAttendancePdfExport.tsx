@@ -3,7 +3,7 @@
 import { useCallback } from "react";
 import { jsPDF } from "jspdf";
 
-type Shift = {
+export type ShiftForPdf = {
   id: string;
   event_name: string;
   date: string;
@@ -14,7 +14,7 @@ type Shift = {
 };
 
 type Props = {
-  shifts: Shift[];
+  shifts: ShiftForPdf[];
   /** { [profileId]: full_name } – serialisierbar von Server zu Client */
   profileNames: Record<string, string>;
 };
@@ -42,6 +42,7 @@ function eventGroupKey(eventName: string): string {
     .trim() || "—";
 }
 
+const PAGE_WIDTH = 210;
 const PAGE_HEIGHT = 297;
 const MARGIN = 12;
 const BOTTOM_LIMIT = PAGE_HEIGHT - 18;
@@ -75,11 +76,11 @@ export default function ShiftAttendancePdfExport({ shifts, profileNames }: Props
 
     doc.setFontSize(12);
     doc.setTextColor(...text);
-    doc.setFont(undefined, "bold");
+    doc.setFont("helvetica", "bold");
     doc.text("Anwesenheits-Auswertung Schichtplan", MARGIN, y);
     y += LINE + 2;
 
-    const byDate = shifts.reduce((acc: Record<string, Shift[]>, s) => {
+    const byDate = shifts.reduce((acc: Record<string, ShiftForPdf[]>, s) => {
       const d = s.date ?? "";
       if (!acc[d]) acc[d] = [];
       acc[d].push(s);
@@ -90,7 +91,7 @@ export default function ShiftAttendancePdfExport({ shifts, profileNames }: Props
       const dayShifts = byDate[dateStr];
       if (dayShifts.length === 0) continue;
 
-      const eventGroups = new Map<string, Shift[]>();
+      const eventGroups = new Map<string, ShiftForPdf[]>();
       for (const s of dayShifts) {
         const key = eventGroupKey(s.event_name);
         if (!eventGroups.has(key)) eventGroups.set(key, []);
@@ -102,14 +103,14 @@ export default function ShiftAttendancePdfExport({ shifts, profileNames }: Props
 
       y = newPageIfNeeded(doc, y);
 
-      const dateCardW = doc.getPageWidth() - MARGIN * 2;
+      const dateCardW = PAGE_WIDTH - MARGIN * 2;
       const dateCardH = LINE + CARD_PAD * 2;
       doc.setFillColor(...cyanLight);
       doc.setDrawColor(...cyanBorder);
       doc.rect(MARGIN, y, dateCardW, dateCardH, "FD");
       doc.setTextColor(...cyan);
       doc.setFontSize(10);
-      doc.setFont(undefined, "bold");
+      doc.setFont("helvetica", "bold");
       doc.text(formatDateLabel(dateStr), MARGIN + CARD_PAD, y + dateCardH / 2 + 1);
       y += dateCardH + CARD_PAD;
 
@@ -127,11 +128,11 @@ export default function ShiftAttendancePdfExport({ shifts, profileNames }: Props
         doc.rect(eventCardX, y, eventCardW, eventHeaderH, "FD");
         doc.setTextColor(...text);
         doc.setFontSize(9);
-        doc.setFont(undefined, "bold");
+        doc.setFont("helvetica", "bold");
         doc.text(eventName + (location ? `  ·  ${location}` : ""), eventCardX + CARD_PAD, y + eventHeaderH / 2 + 1);
         y += eventHeaderH;
 
-        doc.setFont(undefined, "normal");
+        doc.setFont("helvetica", "normal");
         doc.setFontSize(8);
 
         for (const s of groupShifts) {

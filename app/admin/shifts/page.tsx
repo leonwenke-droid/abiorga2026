@@ -5,7 +5,7 @@ import { createSupabaseServiceRoleClient } from "../../../lib/supabaseServer";
 import { removePastShifts } from "../../../lib/cleanupShifts";
 import CreateShiftsForm from "../../../components/CreateShiftsForm";
 import ShiftPlanTableWithEdit from "../../../components/ShiftPlanTableWithEdit";
-import ShiftAttendancePdfExport from "../../../components/ShiftAttendancePdfExport";
+import ShiftAttendancePdfExport, { type ShiftForPdf } from "../../../components/ShiftAttendancePdfExport";
 
 export const dynamic = "force-dynamic";
 
@@ -629,8 +629,13 @@ export default async function ShiftsPage() {
       replacement_user_id: (a as { replacement_user_id?: string }).replacement_user_id ?? null
     });
   }
-  const shifts = (shiftsRaw ?? []).map((s: Record<string, unknown>) => ({
-    ...s,
+  const shifts: ShiftForPdf[] = (shiftsRaw ?? []).map((s: Record<string, unknown>) => ({
+    id: s.id as string,
+    event_name: (s.event_name as string) ?? "",
+    date: (s.date as string) ?? "",
+    start_time: (s.start_time as string) ?? "",
+    end_time: (s.end_time as string) ?? "",
+    location: (s.location as string | null) ?? null,
     shift_assignments: assignmentsByShift.get((s.id as string) ?? "") ?? []
   }));
 
