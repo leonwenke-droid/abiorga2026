@@ -79,7 +79,6 @@ export default async function AdminHome() {
         </svg>
       ),
       title: "Event- & Ressourcenmanagement",
-      desc: "Beschaffung, Organisation und Abrechnung von Materialien und Ressourcen"
     }
   ];
 
