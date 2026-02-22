@@ -66,7 +66,7 @@ export default function AddMaterialForm({
         <p className="text-xs text-red-300">{state.error}</p>
       )}
       {state?.success && (
-        <p className="text-xs text-green-400">Materialbeschaffung erfasst.</p>
+        <p className="text-xs text-green-400">Event- & Ressourcenmanagement erfasst.</p>
       )}
 
       <div className="rounded-lg border border-cyan-500/20 bg-cyan-500/5 p-3 text-xs">
