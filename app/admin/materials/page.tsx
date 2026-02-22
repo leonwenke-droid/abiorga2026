@@ -175,7 +175,7 @@ export default async function MaterialsPage() {
     <div className="space-y-6">
       <section className="card">
         <h2 className="text-sm font-semibold text-cyan-400 mb-3">
-          Neue Materialbeschaffung erfassen
+          Neues Event- & Ressourcenmanagement erfassen
         </h2>
         <AddMaterialForm
           profiles={profiles ?? []}

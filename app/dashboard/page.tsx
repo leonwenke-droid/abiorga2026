@@ -184,7 +184,7 @@ export default async function DashboardPage() {
                 <span className="font-semibold tabular-nums text-cyan-200">{activity.tasks_done_30d}</span>
               </li>
               <li className="flex justify-between items-center">
-                <span className="text-cyan-300/90">Materialbeschaffungen</span>
+                <span className="text-cyan-300/90">Event- & Ressourcenmanagement</span>
                 <span className="font-semibold tabular-nums text-cyan-200">{activity.materials_30d}</span>
               </li>
               {activity.materials_30d > 0 && (
