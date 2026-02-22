@@ -21,7 +21,7 @@ export async function POST(req: NextRequest) {
     const sheetName = workbook.SheetNames[0];
     const sheet = workbook.Sheets[sheetName];
 
-    const cellRef = process.env.TREASURY_EXCEL_CELL || "B2";
+    const cellRef = "M9";
     const cell = sheet[cellRef];
 
     if (!cell || typeof cell.v === "undefined") {
