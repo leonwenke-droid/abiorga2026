@@ -19,7 +19,7 @@ async function createTask(formData: FormData) {
   const service = createSupabaseServiceRoleClient();
   const { data: profile } = await service
     .from("profiles")
-    .select("id, role")
+    .select("id, role, organization_id")
     .eq("auth_user_id", user.id)
     .single();
 
@@ -43,6 +43,7 @@ async function createTask(formData: FormData) {
   }
 
   const token = crypto.randomUUID().replace(/-/g, "");
+  const orgId = (profile as { organization_id?: string | null }).organization_id ?? null;
 
   const { error } = await service.from("tasks").insert({
     title,
@@ -52,7 +53,8 @@ async function createTask(formData: FormData) {
     created_by: profile.id,
     due_at: dueAt ? new Date(dueAt).toISOString() : null,
     proof_required: proofRequired,
-    access_token: token
+    access_token: token,
+    ...(orgId ? { organization_id: orgId } : {})
   });
 
   if (error) {
@@ -63,7 +65,9 @@ async function createTask(formData: FormData) {
   redirect("/admin/tasks");
 }
 
-export default async function NewTaskPage() {
+type NewTaskPageProps = { searchParams?: Promise<{ org?: string }> | { org?: string } };
+
+export default async function NewTaskPage(props: NewTaskPageProps) {
   const supabase = createServerComponentClient({ cookies });
   const service = createSupabaseServiceRoleClient();
 
@@ -75,20 +79,48 @@ export default async function NewTaskPage() {
   if (!userId) {
     return (
       <p className="text-sm text-amber-300">
-        Session nicht erkannt. Bitte <a href="/login" className="underline">erneut einloggen</a>.
+        Session nicht erkannt. Bitte <a href="/" className="underline">einloggen</a> (über dein Jahrgangs-Admin).
       </p>
     );
   }
 
+  const { data: profile, error: profileError } = await service
+    .from("profiles")
+    .select("id, role, organization_id")
+    .eq("auth_user_id", userId)
+    .single();
+
+  let orgId: string | null = (profile as { organization_id?: string | null } | null)?.organization_id ?? null;
+  const raw = props.searchParams;
+  const searchParams = raw && typeof (raw as Promise<unknown>).then === "function"
+    ? await (raw as Promise<{ org?: string }>)
+    : (raw ?? {}) as { org?: string };
+  const orgSlug = searchParams?.org?.trim() || null;
+  if (orgSlug) {
+    try {
+      const { getCurrentOrganization, isOrgAdmin, getOrgIdForData } = await import("../../../../lib/getOrganization");
+      const org = await getCurrentOrganization(orgSlug);
+      const orgIdForData = getOrgIdForData(orgSlug, org.id);
+      if (await isOrgAdmin(orgIdForData)) orgId = orgIdForData;
+    } catch {
+      // orgId bleibt aus Profil
+    }
+  }
+
+  const committeeQuery = service.from("committees").select("id, name").order("name");
+  const membersQuery = service.from("profiles").select("id, full_name, committee_id").order("full_name");
+  if (orgId) {
+    committeeQuery.eq("organization_id", orgId);
+    membersQuery.eq("organization_id", orgId);
+  }
+
   const [
-    { data: profile, error: profileError },
     { data: committees, error: committeesError },
     { data: members, error: membersError },
     { data: profileCommittees }
   ] = await Promise.all([
-    service.from("profiles").select("id, role").eq("auth_user_id", userId).single(),
-    service.from("committees").select("id, name").order("name"),
-    service.from("profiles").select("id, full_name, committee_id").order("full_name"),
+    committeeQuery,
+    membersQuery,
     service.from("profile_committees").select("user_id, committee_id")
   ]);
 

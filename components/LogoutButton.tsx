@@ -2,7 +2,13 @@
 
 import { useState } from "react";
 
-export default function LogoutButton() {
+/**
+ * Nach Logout wird zu returnTo weitergeleitet.
+ * - Aus Super-Admin: returnTo="/login?redirectTo=/super-admin"
+ * - Aus Jahrgang (Admin/Dashboard): returnTo="/{orgSlug}/dashboard"
+ * - Sonst: returnTo="/"
+ */
+export default function LogoutButton({ returnTo = "/" }: { returnTo?: string }) {
   const [loading, setLoading] = useState(false);
 
   const handleLogout = async () => {
@@ -12,7 +18,8 @@ export default function LogoutButton() {
     } catch (e) {
       console.error(e);
     } finally {
-      window.location.href = "/login";
+      const target = returnTo?.trim() || "/";
+      window.location.href = target.startsWith("/") ? target : `/${target}`;
     }
   };
 

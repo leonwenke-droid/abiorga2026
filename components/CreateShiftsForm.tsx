@@ -30,21 +30,26 @@ type CreateShiftsAction = (
 ) => Promise<{ error?: string; success?: boolean }>;
 
 export default function CreateShiftsForm({
-  action
+  action,
+  organizationId
 }: {
   action: CreateShiftsAction;
+  organizationId?: string;
 }) {
   const [state, formAction] = useFormState(action, null);
   const [type, setType] = useState<"pausenverkauf" | "event">("pausenverkauf");
 
   useEffect(() => {
     if (state?.success) {
-      window.location.href = "/admin/shifts";
+      const params = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : new URLSearchParams();
+      const org = params.get("org");
+      window.location.href = org ? `/admin/shifts?org=${encodeURIComponent(org)}` : "/admin/shifts";
     }
   }, [state?.success]);
 
   return (
     <form action={formAction} className="grid gap-3 sm:gap-2 md:grid-cols-2">
+      {organizationId && <input type="hidden" name="organization_id" value={organizationId} />}
       {state?.error && (
         <p className="md:col-span-2 text-xs text-red-300">{state.error}</p>
       )}

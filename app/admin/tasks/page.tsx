@@ -4,6 +4,7 @@ import Link from "next/link";
 import { revalidatePath } from "next/cache";
 import { Suspense } from "react";
 import { createSupabaseServiceRoleClient } from "../../../lib/supabaseServer";
+import { getCurrentOrganization, isOrgAdmin, getOrgIdForData } from "../../../lib/getOrganization";
 import CopyTaskLinkButton from "../../../components/CopyTaskLinkButton";
 import SubmitButtonWithSpinner from "../../../components/SubmitButtonWithSpinner";
 import CommitteeFilter from "../../../components/CommitteeFilter";
@@ -25,14 +26,15 @@ async function deleteTask(formData: FormData) {
   revalidatePath("/admin/tasks");
 }
 
-type PageProps = { searchParams?: Promise<{ committee?: string }> | { committee?: string } };
+type PageProps = { searchParams?: Promise<{ committee?: string; org?: string }> | { committee?: string; org?: string } };
 
 export default async function AdminTasksPage(props: PageProps) {
   const raw = props.searchParams;
   const searchParams = raw && typeof (raw as Promise<unknown>).then === "function"
-    ? await (raw as Promise<{ committee?: string }>)
-    : (raw ?? {}) as { committee?: string };
+    ? await (raw as Promise<{ committee?: string; org?: string }>)
+    : (raw ?? {}) as { committee?: string; org?: string };
   const committeeId = searchParams?.committee?.trim() || null;
+  const orgSlug = searchParams?.org?.trim() || null;
   const supabase = createServerComponentClient({ cookies });
   const {
     data: { user }
@@ -40,9 +42,10 @@ export default async function AdminTasksPage(props: PageProps) {
   const userId = user?.id;
 
   if (!userId) {
+    const loginHref = orgSlug ? `/${orgSlug}/login` : "/";
     return (
       <p className="text-sm text-amber-300">
-        Session nicht erkannt. Bitte <a href="/login" className="underline">erneut einloggen</a>.
+        Session nicht erkannt. Bitte <a href={loginHref} className="underline">erneut einloggen</a>.
       </p>
     );
   }
@@ -50,11 +53,11 @@ export default async function AdminTasksPage(props: PageProps) {
   const service = createSupabaseServiceRoleClient();
   const { data: profile } = await service
     .from("profiles")
-    .select("id, role")
+    .select("id, role, organization_id")
     .eq("auth_user_id", userId)
     .single();
 
-  if (!profile || !["admin", "lead"].includes(profile.role)) {
+  if (!profile || !["admin", "lead", "super_admin"].includes(profile.role)) {
     return (
       <p className="text-sm text-red-300">
         Zugriff nur für Admins & Komiteeleitungen.
@@ -62,17 +65,38 @@ export default async function AdminTasksPage(props: PageProps) {
     );
   }
 
+  let orgId: string | null = null;
+  if (orgSlug) {
+    try {
+      const org = await getCurrentOrganization(orgSlug);
+      const orgIdForData = getOrgIdForData(orgSlug, org.id);
+      if (await isOrgAdmin(orgIdForData)) orgId = orgIdForData;
+    } catch {
+      orgId = null;
+    }
+  }
+  if (!orgId && profile.organization_id) orgId = profile.organization_id;
+
   await service.rpc("apply_task_missed_penalties");
 
+  const committeeQuery = service.from("committees").select("id, name").order("name");
+  const tasksQuery = service
+    .from("tasks")
+    .select(
+      "id, title, description, status, due_at, committee_id, owner_id, created_by, proof_required, proof_url, access_token, organization_id, committees ( name )"
+    )
+    .order("due_at", { ascending: true });
+  const profilesQuery = service.from("profiles").select("id, full_name");
+  if (orgId) {
+    committeeQuery.eq("organization_id", orgId);
+    tasksQuery.eq("organization_id", orgId);
+    profilesQuery.eq("organization_id", orgId);
+  }
+
   const [{ data: committees }, { data: tasks }, { data: profiles }] = await Promise.all([
-    service.from("committees").select("id, name").order("name"),
-    service
-      .from("tasks")
-      .select(
-        "id, title, description, status, due_at, committee_id, owner_id, created_by, proof_required, proof_url, access_token, committees ( name )"
-      )
-      .order("due_at", { ascending: true }),
-    service.from("profiles").select("id, full_name")
+    committeeQuery,
+    tasksQuery,
+    profilesQuery
   ]);
 
   const profileNames = new Map(
@@ -89,6 +113,11 @@ export default async function AdminTasksPage(props: PageProps) {
 
   return (
     <div className="space-y-4">
+      {orgSlug && (
+        <Link href={`/${orgSlug}/admin`} className="text-sm text-cyan-400 hover:text-cyan-300">
+          ← Admin (Jahrgang)
+        </Link>
+      )}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-4">
           <h2 className="text-sm font-semibold text-cyan-400">
@@ -98,7 +127,7 @@ export default async function AdminTasksPage(props: PageProps) {
             <CommitteeFilter committees={committeesForFilter} />
           </Suspense>
         </div>
-        <Link href="/admin/tasks/new" className="btn-primary text-xs">
+        <Link href={orgSlug ? `/admin/tasks/new?org=${encodeURIComponent(orgSlug)}` : "/admin/tasks/new"} className="btn-primary text-xs">
           Neue Aufgabe anlegen
         </Link>
       </div>

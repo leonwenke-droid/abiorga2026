@@ -23,6 +23,18 @@ export async function POST(req: NextRequest) {
     });
 
     if (error) {
+      const needsVerification =
+        /email not confirmed|confirm your email|bestätig/i.test(error.message ?? "") ||
+        (error as { status?: string }).status === "email_not_confirmed";
+      if (needsVerification) {
+        return NextResponse.json(
+          {
+            message: "E-Mail noch nicht bestätigt. Bitte Postfach prüfen und Link in der E-Mail klicken.",
+            needsVerification: true
+          },
+          { status: 403 }
+        );
+      }
       return NextResponse.json(
         {
           message: "Login fehlgeschlagen. Bitte Zugangsdaten prüfen.",

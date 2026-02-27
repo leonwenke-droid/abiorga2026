@@ -1,6 +1,8 @@
 import { cookies } from "next/headers";
+import Link from "next/link";
 import { createServerComponentClient } from "@supabase/auth-helpers-nextjs";
 import { createSupabaseServiceRoleClient } from "../../../lib/supabaseServer";
+import { getCurrentOrganization, isOrgAdmin, getOrgIdForData } from "../../../lib/getOrganization";
 import { revalidatePath } from "next/cache";
 import AddMaterialForm from "../../../components/AddMaterialForm";
 import DeleteMaterialButton from "../../../components/DeleteMaterialButton";
@@ -24,7 +26,7 @@ async function addMaterialProcurement(
   const service = createSupabaseServiceRoleClient();
   const { data: profile } = await service
     .from("profiles")
-    .select("id, role")
+    .select("id, role, organization_id")
     .eq("auth_user_id", user.id)
     .single();
 
@@ -41,7 +43,10 @@ async function addMaterialProcurement(
     return { error: "Mindestens eine Person, Event, Beschreibung und Größe sind erforderlich." };
   }
 
-  const validProfileIds = new Set((await service.from("profiles").select("id")).data?.map((p) => p.id) ?? []);
+  const orgId = (profile as { organization_id?: string | null }).organization_id ?? null;
+  const profilesQuery = service.from("profiles").select("id");
+  if (orgId) profilesQuery.eq("organization_id", orgId);
+  const validProfileIds = new Set((await profilesQuery).data?.map((p) => p.id) ?? []);
   const validUserIds = userIds.filter((id) => validProfileIds.has(id));
   if (validUserIds.length === 0) {
     return { error: "Keine gültigen Personen ausgewählt." };
@@ -115,7 +120,15 @@ async function deleteMaterialProcurement(formData: FormData) {
   revalidatePath("/admin/materials");
 }
 
-export default async function MaterialsPage() {
+type MaterialsPageProps = { searchParams?: Promise<{ org?: string }> | { org?: string } };
+
+export default async function MaterialsPage(props: MaterialsPageProps) {
+  const raw = props.searchParams;
+  const searchParams = raw && typeof (raw as Promise<unknown>).then === "function"
+    ? await (raw as Promise<{ org?: string }>)
+    : (raw ?? {}) as { org?: string };
+  const orgSlug = searchParams?.org?.trim() || null;
+
   const supabase = createServerComponentClient({ cookies });
   const {
     data: { user }
@@ -123,10 +136,11 @@ export default async function MaterialsPage() {
   const userId = user?.id;
 
   if (!userId) {
+    const loginHref = orgSlug ? `/${orgSlug}/login` : "/";
     return (
       <p className="text-sm text-amber-300">
         Session nicht erkannt. Bitte{" "}
-        <a href="/login" className="underline">erneut einloggen</a>.
+        <a href={loginHref} className="underline">erneut einloggen</a>.
       </p>
     );
   }
@@ -134,11 +148,11 @@ export default async function MaterialsPage() {
   const service = createSupabaseServiceRoleClient();
   const { data: profile } = await service
     .from("profiles")
-    .select("id, role")
+    .select("id, role, organization_id")
     .eq("auth_user_id", userId)
     .single();
 
-  if (!profile || !["admin", "lead"].includes(profile.role)) {
+  if (!profile || !["admin", "lead", "super_admin"].includes(profile.role)) {
     return (
       <p className="text-sm text-red-300">
         Zugriff nur für Admins & Komiteeleitungen.
@@ -146,13 +160,28 @@ export default async function MaterialsPage() {
     );
   }
 
+  let orgId: string | null = null;
+  if (orgSlug) {
+    try {
+      const org = await getCurrentOrganization(orgSlug);
+      const orgIdForData = getOrgIdForData(orgSlug, org.id);
+      if (await isOrgAdmin(orgIdForData)) orgId = orgIdForData;
+    } catch {
+      orgId = null;
+    }
+  }
+  if (!orgId && profile.organization_id) orgId = profile.organization_id;
+
+  const profilesQuery = service.from("profiles").select("id, full_name").order("full_name");
+  if (orgId) profilesQuery.eq("organization_id", orgId);
+
   const [{ data: profiles }, { data: materials }, { data: participants }] = await Promise.all([
-    service.from("profiles").select("id, full_name").order("full_name"),
+    profilesQuery,
     service
       .from("material_procurements")
       .select("id, user_id, event_name, item_description, size, created_at")
       .order("created_at", { ascending: false })
-      .limit(80),
+      .limit(200),
     service.from("material_procurement_participants").select("material_id, user_id")
   ]);
 
@@ -171,8 +200,23 @@ export default async function MaterialsPage() {
     participantsByMaterial.set(m.material_id, list);
   }
 
+  const orgProfileIds = new Set((profiles ?? []).map((p: { id: string }) => p.id));
+  const materialsForOrg =
+    orgId == null
+      ? (materials ?? [])
+      : (materials ?? []).filter((m: { id: string; user_id?: string | null }) => {
+          const userIds = participantsByMaterial.get(m.id) ?? (m.user_id ? [m.user_id] : []);
+          if (userIds.length === 0) return false;
+          return userIds.every((uid) => orgProfileIds.has(uid));
+        });
+
   return (
     <div className="space-y-6">
+      {orgSlug && (
+        <Link href={`/${orgSlug}/admin`} className="text-sm text-cyan-400 hover:text-cyan-300">
+          ← Admin (Jahrgang)
+        </Link>
+      )}
       <section className="card">
         <h2 className="text-sm font-semibold text-cyan-400 mb-3">
           Neues Event- & Ressourcenmanagement erfassen
@@ -199,14 +243,14 @@ export default async function MaterialsPage() {
               </tr>
             </thead>
             <tbody>
-              {(materials ?? []).length === 0 ? (
+              {materialsForOrg.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="p-6 text-center text-cyan-400/60">
                     Noch keine Einträge.
                   </td>
                 </tr>
               ) : (
-                (materials ?? []).map((m: {
+                materialsForOrg.map((m: {
                   id: string;
                   user_id?: string | null;
                   event_name: string;

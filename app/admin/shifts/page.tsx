@@ -1,4 +1,5 @@
 import { cookies } from "next/headers";
+import Link from "next/link";
 import { revalidatePath, unstable_noStore } from "next/cache";
 import { createServerComponentClient } from "@supabase/auth-helpers-nextjs";
 import { createSupabaseServiceRoleClient } from "../../../lib/supabaseServer";
@@ -83,16 +84,23 @@ function weightedRandomSelect(
  * So ist die Einteilung fair (wenig engagierte werden eher dran genommen), aber nicht deterministisch.
  * globallyUsed verhindert Mehrfach-Zuteilung innerhalb derselben Batch.
  * Cooldown: Wer in den letzten 3 Tagen eine Schicht hatte, wird nicht erneut eingeteilt.
+ * orgId: nur Personen dieses Jahrgangs berücksichtigen.
  */
 async function autoAssignForShifts(
   service: ReturnType<typeof createSupabaseServiceRoleClient>,
-  shifts: SimpleShift[]
+  shifts: SimpleShift[],
+  orgId: string | null
 ) {
   if (!shifts.length) return;
 
+  const profilesQuery = service.from("profiles").select("id").order("full_name");
+  if (orgId) profilesQuery.eq("organization_id", orgId);
+  const scoresQuery = service.from("engagement_scores").select("user_id, score");
+  if (orgId) scoresQuery.eq("organization_id", orgId);
+
   const [{ data: profiles }, { data: scores }] = await Promise.all([
-    service.from("profiles").select("id").order("full_name"),
-    service.from("engagement_scores").select("user_id, score")
+    profilesQuery,
+    scoresQuery
   ]);
 
   const scoreMap = new Map(
@@ -162,6 +170,7 @@ async function createShifts(
     const requiredSlots = Number(
       formData.get("required_slots")?.toString() || "0"
     ) || 0;
+    const organizationId = formData.get("organization_id")?.toString() || null;
 
     if (!date) {
       return { error: "Datum ist erforderlich." };
@@ -187,37 +196,13 @@ async function createShifts(
       createdBy = profile?.id ?? null;
     }
 
+    const baseRow = (overrides: Partial<{ event_name: string; date: string; start_time: string; end_time: string; location: string | null; notes: string | null; created_by: string | null; required_slots: number }>) =>
+      ({ event_name: "", date, start_time: "", end_time: "", location, notes, created_by: createdBy, required_slots: requiredSlots, ...overrides, ...(organizationId ? { organization_id: organizationId } : {}) });
+
     if (type === "pausenverkauf") {
-      const rows: {
-        event_name: string;
-        date: string;
-        start_time: string;
-        end_time: string;
-        location: string | null;
-        notes: string | null;
-        created_by: string | null;
-        required_slots: number;
-      }[] = [
-        {
-          event_name: `${eventName} – 1. Pause`,
-          date,
-          start_time: "09:15",
-          end_time: "09:35",
-          location,
-          notes,
-          created_by: createdBy,
-          required_slots: requiredSlots
-        },
-        {
-          event_name: `${eventName} – 2. Pause`,
-          date,
-          start_time: "11:05",
-          end_time: "11:30",
-          location,
-          notes,
-          created_by: createdBy,
-          required_slots: requiredSlots
-        }
+      const rows = [
+        baseRow({ event_name: `${eventName} – 1. Pause`, start_time: "09:15", end_time: "09:35" }),
+        baseRow({ event_name: `${eventName} – 2. Pause`, start_time: "11:05", end_time: "11:30" })
       ];
       const { data: created, error } = await service
         .from("shifts")
@@ -231,7 +216,7 @@ async function createShifts(
             "Schichten für Pausenverkauf konnten nicht angelegt werden. Ist die Spalte required_slots in der Tabelle shifts vorhanden?"
         };
       }
-      await autoAssignForShifts(service, created as SimpleShift[]);
+      await autoAssignForShifts(service, created as SimpleShift[], organizationId);
     } else {
       if (!startTime || !endTime) {
         return {
@@ -256,7 +241,7 @@ async function createShifts(
         return { error: "Endzeit muss nach der Startzeit liegen." };
       }
 
-      const rows: { event_name: string; date: string; start_time: string; end_time: string; location: string | null; notes: string | null; created_by: string | null; required_slots: number }[] = [];
+      const rows: Record<string, unknown>[] = [];
       let slotStart = startMin;
       while (slotStart < endMin) {
         const slotEnd = Math.min(slotStart + intervalMinutes, endMin);
@@ -268,7 +253,8 @@ async function createShifts(
           location,
           notes,
           created_by: createdBy,
-          required_slots: requiredSlots
+          required_slots: requiredSlots,
+          ...(organizationId ? { organization_id: organizationId } : {})
         });
         slotStart = slotEnd;
       }
@@ -285,7 +271,7 @@ async function createShifts(
             "Veranstaltungs-Schichten konnten nicht angelegt werden."
         };
       }
-      await autoAssignForShifts(service, created as SimpleShift[]);
+      await autoAssignForShifts(service, created as SimpleShift[], organizationId);
     }
 
     revalidatePath("/admin/shifts");
@@ -556,8 +542,16 @@ async function deleteEventShifts(formData: FormData) {
   revalidatePath("/dashboard");
 }
 
-export default async function ShiftsPage() {
+type ShiftsPageProps = { searchParams?: Promise<{ org?: string }> | { org?: string } };
+
+export default async function ShiftsPage(props: ShiftsPageProps) {
   unstable_noStore();
+  const raw = props.searchParams;
+  const searchParams = raw && typeof (raw as Promise<unknown>).then === "function"
+    ? await (raw as Promise<{ org?: string }>)
+    : (raw ?? {}) as { org?: string };
+  const orgSlug = searchParams?.org?.trim() || null;
+
   const supabase = createServerComponentClient({ cookies });
   const {
     data: { user }
@@ -565,9 +559,10 @@ export default async function ShiftsPage() {
   const userId = user?.id;
 
   if (!userId) {
+    const loginHref = orgSlug ? `/${orgSlug}/login` : "/";
     return (
       <p className="text-sm text-amber-300">
-        Session nicht erkannt. Bitte <a href="/login" className="underline">erneut einloggen</a>.
+        Session nicht erkannt. Bitte <a href={loginHref} className="underline">erneut einloggen</a>.
       </p>
     );
   }
@@ -575,11 +570,11 @@ export default async function ShiftsPage() {
   const service = createSupabaseServiceRoleClient();
   const { data: profile } = await service
     .from("profiles")
-    .select("id, role")
+    .select("id, role, organization_id")
     .eq("auth_user_id", userId)
     .single();
 
-  if (!profile || !["admin", "lead"].includes(profile.role)) {
+  if (!profile || !["admin", "lead", "super_admin"].includes(profile.role)) {
     return (
       <p className="text-sm text-red-300">
         Zugriff nur für Admins & Komiteeleitungen.
@@ -587,11 +582,34 @@ export default async function ShiftsPage() {
     );
   }
 
+  let orgId: string | null = null;
+  if (orgSlug) {
+    try {
+      const { getCurrentOrganization, isOrgAdmin, getOrgIdForData } = await import("../../../lib/getOrganization");
+      const org = await getCurrentOrganization(orgSlug);
+      const orgIdForData = getOrgIdForData(orgSlug, org.id);
+      if (await isOrgAdmin(orgIdForData)) orgId = orgIdForData;
+    } catch {
+      orgId = null;
+    }
+  }
+  if (!orgId && profile.organization_id) orgId = profile.organization_id;
+
   await removePastShifts(service);
 
   const todayStr = new Date().toLocaleDateString("en-CA", {
     timeZone: "Europe/Berlin"
   });
+
+  const shiftsQuery = service
+    .from("shifts")
+    .select("id, event_name, date, start_time, end_time, location, notes")
+    .order("date", { ascending: true });
+  const profilesQuery = service.from("profiles").select("id, full_name").order("full_name");
+  if (orgId) {
+    shiftsQuery.eq("organization_id", orgId);
+    profilesQuery.eq("organization_id", orgId);
+  }
 
   const [
     { data: shiftsRaw, error: shiftsError },
@@ -599,14 +617,11 @@ export default async function ShiftsPage() {
     { data: profiles },
     { data: counters }
   ] = await Promise.all([
-    service
-      .from("shifts")
-      .select("id, event_name, date, start_time, end_time, location, notes")
-      .order("date", { ascending: true }),
+    shiftsQuery,
     service
       .from("shift_assignments")
       .select("id, shift_id, status, user_id, replacement_user_id"),
-    service.from("profiles").select("id, full_name").order("full_name"),
+    profilesQuery,
     service.from("user_counters").select("user_id, load_index, responsibility_malus")
   ]);
 
@@ -663,6 +678,11 @@ export default async function ShiftsPage() {
 
   return (
     <div className="space-y-4">
+      {orgSlug && (
+        <Link href={`/${orgSlug}/admin`} className="text-sm text-cyan-400 hover:text-cyan-300">
+          ← Admin (Jahrgang)
+        </Link>
+      )}
       <h2 className="text-sm font-semibold text-cyan-400">
         Schichten & Auto-Zuteilung
       </h2>
@@ -671,7 +691,7 @@ export default async function ShiftsPage() {
         <p className="text-cyan-100/80 text-[11px] hidden sm:block">
           Pausenverkauf (1. + 2. Pause) oder einzelne Veranstaltung.
         </p>
-        <CreateShiftsForm action={createShifts} />
+        <CreateShiftsForm action={createShifts} organizationId={orgId ?? undefined} />
       </section>
       <section className="rounded-xl border border-cyan-500/15 bg-card/50 shadow-sm overflow-hidden">
         <div className="border-b border-cyan-500/15 bg-cyan-500/5 px-4 py-3 flex flex-wrap items-center justify-between gap-2">

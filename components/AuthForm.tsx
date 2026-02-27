@@ -25,13 +25,18 @@ export default function AuthForm({ redirectTo }: { redirectTo?: string }) {
 
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
+      if (data.needsVerification) {
+        const next = redirectTo || "/";
+        window.location.href = `/claim-org/check-email?next=${encodeURIComponent(next)}`;
+        return;
+      }
       setError(
         data.message || "Login fehlgeschlagen. Bitte Zugangsdaten prüfen."
       );
       return;
     }
 
-    window.location.href = redirectTo || "/admin";
+    window.location.href = redirectTo || "/dashboard";
   };
 
   return (
