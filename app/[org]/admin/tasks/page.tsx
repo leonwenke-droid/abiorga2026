@@ -31,10 +31,12 @@ export default async function AdminTasksPage(props: {
       <h1 className="mt-4 text-2xl font-bold text-cyan-100">Aufgaben – {org.name}</h1>
       <p className="mt-1 text-sm text-cyan-300">Verwalten (Jahrgang)</p>
       <ul className="mt-6 space-y-2 rounded-lg border border-cyan-500/30 bg-card p-4">
-        {(tasks ?? []).map((t: { id: string; title: string; status: string; committees?: { name: string } }) => (
+        {(tasks ?? []).map((t: { id: string; title: string | null; status: string | null; committees: { name: string | null }[] }) => (
           <li key={t.id} className="flex justify-between text-sm">
             <span className="text-cyan-100">{t.title ?? "-"}</span>
-            <span className="text-cyan-400/80">{t.status} · {(t.committees as { name?: string })?.name ?? "-"}</span>
+            <span className="text-cyan-400/80">
+              {t.status ?? "-"} · {t.committees?.[0]?.name ?? "-"}
+            </span>
           </li>
         ))}
         {(!tasks || tasks.length === 0) && (

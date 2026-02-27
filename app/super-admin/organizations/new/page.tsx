@@ -5,6 +5,8 @@ import { isSuperAdmin } from "../../../../lib/getOrganization";
 import Link from "next/link";
 import { randomUUID } from "crypto";
 
+export const dynamic = "force-dynamic";
+
 export default async function NewOrganizationPage() {
   if (!(await isSuperAdmin())) {
     redirect("/");

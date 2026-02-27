@@ -16,6 +16,8 @@ import { createSupabaseServiceRoleClient } from "../../lib/supabaseServer";
 import DeleteOrgButton from "./DeleteOrgButton";
 import SetupLinkBlock from "./SetupLinkBlock";
 
+export const dynamic = "force-dynamic";
+
 const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "";
 
 export default async function SuperAdminDashboard() {
