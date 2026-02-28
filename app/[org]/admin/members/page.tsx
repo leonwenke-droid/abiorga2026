@@ -143,21 +143,36 @@ export default async function AdminMembersPage({
         <AddMemberForm orgSlug={orgSlug} committees={committeeList} />
       </div>
 
-      <ul className="mt-6 space-y-2 rounded-lg border border-cyan-500/30 bg-card p-4">
-        {(members ?? []).map((m: any) => (
-          <MemberRow
-            key={m.id}
-            orgSlug={orgSlug}
-            member={m}
-            committees={committeeList}
-            currentAuthUserId={currentAuthUserId}
-            inviteStatus={inviteStatusByProfileId[m.id]}
-          />
-        ))}
-        {(!members || members.length === 0) && (
-          <li className="text-cyan-400/80">Noch keine Mitglieder.</li>
-        )}
-      </ul>
+      <div className="mt-6 overflow-x-auto rounded-lg border border-cyan-500/30 bg-card">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-cyan-500/20 bg-cyan-500/5">
+              <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider text-cyan-400">Name</th>
+              <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider text-cyan-400">Komitees</th>
+              <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider text-cyan-400">Lead</th>
+              <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider text-cyan-400">Status</th>
+              <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider text-cyan-400">Aktionen</th>
+            </tr>
+          </thead>
+          <tbody>
+            {(members ?? []).map((m: any) => (
+              <MemberRow
+                key={m.id}
+                orgSlug={orgSlug}
+                member={m}
+                committees={committeeList}
+                currentAuthUserId={currentAuthUserId}
+                inviteStatus={inviteStatusByProfileId[m.id]}
+              />
+            ))}
+            {(!members || members.length === 0) && (
+              <tr>
+                <td colSpan={5} className="px-4 py-8 text-center text-cyan-400/80">Noch keine Mitglieder.</td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

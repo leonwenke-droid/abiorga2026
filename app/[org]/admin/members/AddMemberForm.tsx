@@ -98,22 +98,19 @@ export default function AddMemberForm({
           </div>
         )}
         {committees.length > 0 && (
-          <div>
-            <label className="mb-1 block text-xs font-semibold text-cyan-400">Komitees (optional, mehrere möglich)</label>
-            <div className="flex flex-wrap gap-3 rounded border border-cyan-500/30 bg-card/60 p-2">
+          <details className="group">
+            <summary className="cursor-pointer text-xs font-semibold text-cyan-400 hover:text-cyan-300">
+              Komitees ({committeeIds.size} ausgewählt) ▾
+            </summary>
+            <div className="mt-1 flex flex-wrap gap-2 rounded border border-cyan-500/30 bg-card/60 p-2">
               {committees.map((c) => (
                 <label key={c.id} className="flex cursor-pointer items-center gap-1.5 text-xs text-cyan-100">
-                  <input
-                    type="checkbox"
-                    checked={committeeIds.has(c.id)}
-                    onChange={() => toggleCommittee(c.id)}
-                    className="rounded border-cyan-500/40"
-                  />
+                  <input type="checkbox" checked={committeeIds.has(c.id)} onChange={() => toggleCommittee(c.id)} className="rounded border-cyan-500/40" />
                   {c.name}
                 </label>
               ))}
             </div>
-          </div>
+          </details>
         )}
         {error && <p className="text-xs text-red-300">{error}</p>}
         {success && <p className="text-xs text-green-400">Mitglied hinzugefügt.</p>}
