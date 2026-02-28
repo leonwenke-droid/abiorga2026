@@ -166,10 +166,10 @@ export async function updateMemberNameAction(
   return { error: null };
 }
 
-export async function updateMemberCommitteeAction(
+export async function updateMemberCommitteesAction(
   orgSlug: string,
   profileId: string,
-  committeeId: string | null
+  committeeIds: string[]
 ): Promise<{ error: string | null }> {
   const org = await getCurrentOrganization(orgSlug);
   const orgIdForData = getOrgIdForData(orgSlug, org.id);
@@ -178,9 +178,27 @@ export async function updateMemberCommitteeAction(
   const supabase = process.env.SUPABASE_SERVICE_ROLE_KEY
     ? createSupabaseServiceRoleClient()
     : createServerComponentClient({ cookies });
+
+  const ids = committeeIds.filter(Boolean);
+  const primaryId = ids[0] || null;
+
+  const { error: delErr } = await supabase
+    .from("profile_committees")
+    .delete()
+    .eq("user_id", profileId);
+
+  if (delErr) return { error: delErr.message };
+
+  if (ids.length > 0) {
+    const { error: insErr } = await supabase.from("profile_committees").insert(
+      ids.map((cid) => ({ user_id: profileId, committee_id: cid }))
+    );
+    if (insErr) return { error: insErr.message };
+  }
+
   const { error } = await supabase
     .from("profiles")
-    .update({ committee_id: committeeId || null })
+    .update({ committee_id: primaryId })
     .eq("id", profileId)
     .eq("organization_id", orgIdForData);
 
@@ -324,13 +342,13 @@ export async function setMemberAsLeadAction(
 }
 
 /**
- * Mitglied manuell anlegen (nur Name erforderlich, Komitee optional).
+ * Mitglied manuell anlegen (nur Name erforderlich, Komitees optional).
  * Bei Lead mit E-Mail: Einladungs-Mail mit Link zum Passwort setzen wird versendet.
  */
 export async function addMemberAction(
   orgSlug: string,
   fullName: string,
-  options?: { email?: string; committeeId?: string | null; asLead?: boolean }
+  options?: { email?: string; committeeIds?: string[]; asLead?: boolean }
 ): Promise<{ error: string | null }> {
   const org = await getCurrentOrganization(orgSlug);
   const orgIdForData = getOrgIdForData(orgSlug, org.id);
@@ -347,18 +365,26 @@ export async function addMemberAction(
   const id = randomUUID();
   const role = options?.asLead ? "lead" : "member";
   const emailTrimmed = (options?.email || "").trim() || null;
+  const committeeIds = (options?.committeeIds ?? []).filter(Boolean);
+  const primaryCommitteeId = committeeIds[0] || null;
 
   const { error } = await supabase.from("profiles").insert({
     id,
     full_name: name,
     role,
     organization_id: orgIdForData,
-    committee_id: options?.committeeId || null,
+    committee_id: primaryCommitteeId,
     email: emailTrimmed,
     auth_user_id: null
   });
 
   if (error) return { error: error.message };
+
+  if (committeeIds.length > 0) {
+    await supabase.from("profile_committees").insert(
+      committeeIds.map((cid) => ({ user_id: id, committee_id: cid }))
+    );
+  }
 
   if (options?.asLead && emailTrimmed) {
     const serviceInvite = createSupabaseServiceRoleClient();

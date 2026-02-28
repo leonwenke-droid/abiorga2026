@@ -14,11 +14,20 @@ export default function AddMemberForm({
 }) {
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
-  const [committeeId, setCommitteeId] = useState("");
+  const [committeeIds, setCommitteeIds] = useState<Set<string>>(new Set());
   const [asLead, setAsLead] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+
+  const toggleCommittee = (id: string) => {
+    setCommitteeIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -32,7 +41,7 @@ export default function AddMemberForm({
     setSuccess(false);
     const { error: err } = await addMemberAction(orgSlug, name, {
       email: email.trim() || undefined,
-      committeeId: committeeId || null,
+      committeeIds: Array.from(committeeIds),
       asLead
     });
     setLoading(false);
@@ -43,7 +52,7 @@ export default function AddMemberForm({
     setSuccess(true);
     setFullName("");
     setEmail("");
-    setCommitteeId("");
+    setCommitteeIds(new Set());
     setAsLead(false);
     window.location.reload();
   };
@@ -90,19 +99,20 @@ export default function AddMemberForm({
         )}
         {committees.length > 0 && (
           <div>
-            <label className="mb-1 block text-xs font-semibold text-cyan-400">Komitee (optional)</label>
-            <select
-              value={committeeId}
-              onChange={(e) => setCommitteeId(e.target.value)}
-              className="w-full rounded border border-cyan-500/30 bg-card/60 p-2 text-xs text-cyan-100"
-            >
-              <option value="">— Keins —</option>
+            <label className="mb-1 block text-xs font-semibold text-cyan-400">Komitees (optional, mehrere möglich)</label>
+            <div className="flex flex-wrap gap-3 rounded border border-cyan-500/30 bg-card/60 p-2">
               {committees.map((c) => (
-                <option key={c.id} value={c.id}>
+                <label key={c.id} className="flex cursor-pointer items-center gap-1.5 text-xs text-cyan-100">
+                  <input
+                    type="checkbox"
+                    checked={committeeIds.has(c.id)}
+                    onChange={() => toggleCommittee(c.id)}
+                    className="rounded border-cyan-500/40"
+                  />
                   {c.name}
-                </option>
+                </label>
               ))}
-            </select>
+            </div>
           </div>
         )}
         {error && <p className="text-xs text-red-300">{error}</p>}

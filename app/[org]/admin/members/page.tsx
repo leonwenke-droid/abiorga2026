@@ -65,9 +65,29 @@ export default async function AdminMembersPage({
     extraMembers = (extra ?? []) as Array<{ id: string; full_name: string | null; role?: string; committee_id?: string | null; email?: string | null; auth_user_id?: string | null; committee: unknown }>;
   }
 
-  const members = [...(orgMembers ?? []), ...extraMembers].sort((a, b) =>
-    (a.full_name ?? "").localeCompare(b.full_name ?? "")
-  );
+  const allMemberIds = [...(orgMembers ?? []), ...extraMembers].map((m: { id: string }) => m.id);
+  const committeeIdsByMember: Record<string, string[]> = {};
+  if (allMemberIds.length > 0) {
+    const { data: pcRows } = await supabase
+      .from("profile_committees")
+      .select("user_id, committee_id")
+      .in("user_id", allMemberIds);
+    for (const row of pcRows ?? []) {
+      const r = row as { user_id: string; committee_id: string };
+      if (!committeeIdsByMember[r.user_id]) committeeIdsByMember[r.user_id] = [];
+      committeeIdsByMember[r.user_id].push(r.committee_id);
+    }
+  }
+
+  const members = [...(orgMembers ?? []), ...extraMembers]
+    .map((m: { id: string; full_name?: string | null; committee_id?: string | null } & Record<string, unknown>) => ({
+      ...m,
+      committee_ids: [...new Set([
+        ...(committeeIdsByMember[m.id] ?? []),
+        ...(m.committee_id ? [m.committee_id] : [])
+      ])]
+    }))
+    .sort((a, b) => ((a as { full_name?: string | null }).full_name ?? "").localeCompare((b as { full_name?: string | null }).full_name ?? ""));
 
   // Einladungsstatus bestimmen (nur wenn Service-Role verfügbar, damit wir Admin-API nutzen können)
   const inviteStatusByProfileId: Record<string, "pending" | "confirmed"> = {};

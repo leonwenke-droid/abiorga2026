@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { updateMemberNameAction, updateMemberCommitteeAction, updateMemberRoleAction, setMemberAsLeadAction, deleteMemberAction, resendLeadInviteAction } from "./actions";
+import { updateMemberNameAction, updateMemberCommitteesAction, updateMemberRoleAction, setMemberAsLeadAction, deleteMemberAction, resendLeadInviteAction } from "./actions";
 
 type Committee = { id: string; name: string };
 type Member = {
@@ -12,6 +12,7 @@ type Member = {
   email?: string | null;
   auth_user_id?: string | null;
   committee?: { name?: string } | null;
+  committee_ids?: string[];
 };
 
 export default function MemberRow({
@@ -35,7 +36,9 @@ export default function MemberRow({
   const [name, setName] = useState(member.full_name ?? "");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [committeeId, setCommitteeId] = useState(member.committee_id ?? "");
+  const [committeeIds, setCommitteeIds] = useState<Set<string>>(
+    new Set(member.committee_ids ?? (member.committee_id ? [member.committee_id] : []))
+  );
   const [isLead, setIsLead] = useState(hasLeadRole);
   const [showLeadEmailForm, setShowLeadEmailForm] = useState(false);
   const [leadEmail, setLeadEmail] = useState(member.email ?? "");
@@ -57,13 +60,21 @@ export default function MemberRow({
     window.location.reload();
   }
 
-  async function handleCommitteeChange(newCommitteeId: string) {
-    setCommitteeId(newCommitteeId);
+  function toggleCommittee(id: string) {
+    setCommitteeIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  async function handleCommitteesSave() {
     setError(null);
-    const { error: err } = await updateMemberCommitteeAction(
+    const { error: err } = await updateMemberCommitteesAction(
       orgSlug,
       member.id,
-      newCommitteeId || null
+      Array.from(committeeIds)
     );
     if (err) setError(err);
     else window.location.reload();
@@ -156,18 +167,28 @@ export default function MemberRow({
             {effectiveStatus === "confirmed" ? "Angemeldet" : "Einladung ausstehend"}
           </span>
         )}
-        <select
-          value={committeeId}
-          onChange={(e) => handleCommitteeChange(e.target.value)}
-          className="rounded border border-cyan-500/30 bg-background px-2 py-1 text-cyan-100"
-        >
-          <option value="">– Kein Komitee –</option>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs text-cyan-400/80">Komitees:</span>
           {committees.map((c) => (
-            <option key={c.id} value={c.id}>
+            <label key={c.id} className="flex cursor-pointer items-center gap-1.5 rounded border border-cyan-500/30 bg-background px-2 py-0.5 text-xs text-cyan-100">
+              <input
+                type="checkbox"
+                checked={committeeIds.has(c.id)}
+                onChange={() => toggleCommittee(c.id)}
+                className="rounded border-cyan-500/40"
+              />
               {c.name}
-            </option>
+            </label>
           ))}
-        </select>
+          <button
+            type="button"
+            onClick={handleCommitteesSave}
+            disabled={loading}
+            className="rounded bg-cyan-600 px-2 py-0.5 text-[10px] text-white hover:bg-cyan-700 disabled:opacity-50"
+          >
+            Speichern
+          </button>
+        </div>
         <label className="flex cursor-pointer items-center gap-1.5 text-cyan-300">
           <input
             type="checkbox"
