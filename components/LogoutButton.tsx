@@ -28,9 +28,9 @@ export default function LogoutButton({ returnTo = "/" }: { returnTo?: string }) 
       type="button"
       onClick={handleLogout}
       disabled={loading}
-      className="text-xs text-cyan-300 hover:text-cyan-100"
+      className="rounded-md border border-cyan-500/20 px-3 py-1.5 text-xs font-medium text-cyan-400 transition hover:border-cyan-500/40 hover:bg-cyan-500/10 hover:text-cyan-200 disabled:opacity-50"
     >
-      {loading ? "Abmelden..." : "Logout"}
+      {loading ? "Abmelden…" : "Abmelden"}
     </button>
   );
 }

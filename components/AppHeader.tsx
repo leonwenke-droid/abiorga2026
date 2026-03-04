@@ -2,6 +2,7 @@
 
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
+import { Suspense } from "react";
 import type { User } from "@supabase/supabase-js";
 import HeaderNav from "./HeaderNav";
 
@@ -47,7 +48,9 @@ export default function AppHeader({ user }: { user: User | null }) {
           Aufgaben, Schichten & Finanzen.
         </p>
       </div>
-      <HeaderNav user={user} />
+      <Suspense fallback={<div className="h-9 w-32 animate-pulse rounded-lg bg-cyan-500/10" />}>
+        <HeaderNav user={user} />
+      </Suspense>
     </header>
   );
 }
