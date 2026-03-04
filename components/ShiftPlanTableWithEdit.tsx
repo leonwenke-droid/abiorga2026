@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import ShiftEditModal from "./ShiftEditModal";
 import SubmitButtonWithSpinner from "./SubmitButtonWithSpinner";
@@ -66,6 +66,14 @@ export default function ShiftPlanTableWithEdit({
 }: Props) {
   const router = useRouter();
   const [editingShifts, setEditingShifts] = useState<any[] | null>(null);
+
+  /** Nach Personenänderung werden Schichten neu geladen – Modal-Daten synchronisieren */
+  useEffect(() => {
+    if (!editingShifts?.length || !shifts?.length) return;
+    const ids = editingShifts.map((s: any) => s.id);
+    const updated = ids.map((id) => shifts.find((s: any) => s.id === id)).filter(Boolean);
+    if (updated.length === ids.length) setEditingShifts(updated);
+  }, [shifts]);
   const [editingPersonsOnly, setEditingPersonsOnly] = useState(false);
   const [notAttendedAssignmentId, setNotAttendedAssignmentId] = useState<string | null>(null);
   const [editingAssignmentId, setEditingAssignmentId] = useState<string | null>(null);
@@ -394,6 +402,7 @@ export default function ShiftPlanTableWithEdit({
           removeAssignment={removeAssignment}
           replaceAssignment={replaceAssignment}
           onClose={() => { setEditingShifts(null); setEditingPersonsOnly(false); }}
+          onRefresh={router.refresh}
           personsOnly={editingPersonsOnly}
           allShiftsWithAssignments={editingShifts.length > 1 && !editingPersonsOnly && updateEventGroup
             ? editingShifts.map((s: any) => ({

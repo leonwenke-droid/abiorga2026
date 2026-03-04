@@ -28,6 +28,8 @@ type Props = {
   removeAssignment: (assignmentId: string) => Promise<void>;
   replaceAssignment: (assignmentId: string, formData: FormData) => Promise<void>;
   onClose: () => void;
+  /** Nach Personenänderung aufrufen, damit Daten neu geladen werden (Modal bleibt offen) */
+  onRefresh?: () => void;
   /** Nur Personen bearbeiten, keine Veranstaltungsdaten */
   personsOnly?: boolean;
   /** Alle Schichten der Veranstaltung (für Event-Bearbeitung: Personen aus allen Zeitslots) */
@@ -66,6 +68,7 @@ export default function ShiftEditModal({
   removeAssignment,
   replaceAssignment,
   onClose,
+  onRefresh,
   personsOnly = false,
   allShiftsWithAssignments,
   updateEventGroup
@@ -207,21 +210,21 @@ export default function ShiftEditModal({
                         {aList.map((a) => (
                           <li key={a.id} className="flex items-center gap-2 rounded border border-cyan-500/15 bg-card/40 px-2 py-1.5">
                             <span className="flex-1 text-[11px] text-cyan-200 truncate">{profileNames.get(a.user_id ?? "") ?? "–"}</span>
-                            <form action={async (fd: FormData) => { const uid = fd.get("user_id")?.toString(); if (uid) { await replaceAssignment(a.id, fd); onClose(); } }} className="flex items-center gap-1">
+                            <form action={async (fd: FormData) => { const uid = fd.get("user_id")?.toString(); if (uid) { await replaceAssignment(a.id, fd); onRefresh?.(); } }} className="flex items-center gap-1">
                               <select name="user_id" className="rounded border border-cyan-500/30 bg-card/60 px-1 py-0.5 text-[10px]">
                                 <option value="">Ersetzen</option>
                                 {members.filter((m) => m.id !== a.user_id).map((m) => <option key={m.id} value={m.id}>{m.full_name}</option>)}
                               </select>
                               <SubmitButtonWithSpinner className="rounded bg-cyan-500/20 px-1.5 py-0.5 text-[10px] text-cyan-300" loadingLabel="…">Ersetzen</SubmitButtonWithSpinner>
                             </form>
-                            <form action={async () => { await removeAssignment(a.id); onClose(); }}>
+                            <form action={async () => { await removeAssignment(a.id); onRefresh?.(); }}>
                               <SubmitButtonWithSpinner className="rounded bg-red-500/20 px-1.5 py-0.5 text-[10px] text-red-300" title="Entfernen" loadingLabel="…">✕</SubmitButtonWithSpinner>
                             </form>
                           </li>
                         ))}
                       </ul>
                     )}
-                    <form action={async (fd: FormData) => { const uid = fd.get("user_id")?.toString(); if (uid) { await assignToShift(s.id, fd); onClose(); } }} className="flex items-center gap-2">
+                    <form action={async (fd: FormData) => { const uid = fd.get("user_id")?.toString(); if (uid) { await assignToShift(s.id, fd); onRefresh?.(); } }} className="flex items-center gap-2">
                       <select name="user_id" className="rounded border border-cyan-500/30 bg-card/60 px-1.5 py-0.5 text-[10px] flex-1 min-w-0">
                         <option value="">Hinzufügen …</option>
                         {members.filter((m) => !aList.some((a) => a.user_id === m.id)).map((m) => <option key={m.id} value={m.id}>{m.full_name}</option>)}
@@ -250,10 +253,7 @@ export default function ShiftEditModal({
                     <form
                       action={async (formData) => {
                         const uid = formData.get("user_id")?.toString();
-                        if (uid) {
-                          await replaceAssignment(a.id, formData);
-                          onClose();
-                        }
+                        if (uid) { await replaceAssignment(a.id, formData); onRefresh?.(); }
                       }}
                       className="flex items-center gap-2"
                     >
@@ -277,12 +277,7 @@ export default function ShiftEditModal({
                         Ersetzen
                       </SubmitButtonWithSpinner>
                     </form>
-                    <form
-                      action={async () => {
-                        await removeAssignment(a.id);
-                        onClose();
-                      }}
-                    >
+                    <form action={async () => { await removeAssignment(a.id); onRefresh?.(); }}>
                       <SubmitButtonWithSpinner
                         className="rounded bg-red-500/20 px-1.5 py-0.5 text-[10px] text-red-300 hover:bg-red-500/30 disabled:opacity-70"
                         title="Entfernen"
@@ -298,10 +293,7 @@ export default function ShiftEditModal({
             <form
               action={async (formData) => {
                 const uid = formData.get("user_id")?.toString();
-                if (uid) {
-                  await assignToShift(shift.id, formData);
-                  onClose();
-                }
+                if (uid) { await assignToShift(shift.id, formData); onRefresh?.(); }
               }}
               className="flex items-center gap-2 mt-2"
             >
