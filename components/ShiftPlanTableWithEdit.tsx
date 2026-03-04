@@ -94,6 +94,8 @@ export default function ShiftPlanTableWithEdit({
     String(eventName ?? "")
       .trim()
       .replace(/\s*–\s*[12]\.\s*Pause$/i, "")
+      .replace(/\s*–\s*Aufbau$/i, "")
+      .replace(/\s*–\s*Abbau$/i, "")
       .replace(/\s*–\s*\d{1,2}:\d{2}–\d{1,2}:\d{2}$/, "")
       .trim() || "—";
 

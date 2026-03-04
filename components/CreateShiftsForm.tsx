@@ -123,6 +123,22 @@ export default function CreateShiftsForm({
             </div>
           </div>
           <div className="space-y-1 md:col-span-2">
+            <label className="inline-flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                name="add_setup_teardown"
+                value="1"
+                className="rounded border-cyan-500/40 bg-card/60"
+              />
+              <span className="text-[11px] font-semibold text-cyan-400">
+                Auf- und Abbauphase (je 30 Min.) hinzufügen
+              </span>
+            </label>
+            <p className="text-[10px] text-cyan-400/70 ml-6">
+              Ergänzend zur Veranstaltung: Aufbau vor Start, Abbau nach Ende.
+            </p>
+          </div>
+          <div className="space-y-1 md:col-span-2">
             <label className="text-[11px] font-semibold text-cyan-400">
               Schichtintervall
             </label>

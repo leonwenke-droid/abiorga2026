@@ -28,6 +28,7 @@ type ActivityStats = {
   materials_medium_30d: number;
   materials_large_30d: number;
   active_participants_30d: number;
+  total_members: number;
 };
 
 async function getData(organizationId: string, supabaseOverride?: SupabaseClient) {
@@ -148,7 +149,8 @@ async function getData(organizationId: string, supabaseOverride?: SupabaseClient
     materials_small_30d: materialEvents.filter((e) => e.event_type === "material_small").length,
     materials_medium_30d: materialEvents.filter((e) => e.event_type === "material_medium").length,
     materials_large_30d: materialEvents.filter((e) => e.event_type === "material_large").length,
-    active_participants_30d: new Set(activeUserIds).size
+    active_participants_30d: new Set(activeUserIds).size,
+    total_members: (profiles ?? []).length
   };
 
   return {
@@ -302,7 +304,7 @@ export default async function OrgDashboardPage({
                   Aktive Teilnehmer
                 </span>
                 <span className="font-semibold tabular-nums text-cyan-200">
-                  {activity.active_participants_30d}
+                  {activity.active_participants_30d} / {activity.total_members}
                 </span>
               </li>
             </ul>

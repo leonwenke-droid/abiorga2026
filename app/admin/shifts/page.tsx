@@ -224,6 +224,7 @@ async function createShifts(
         };
       }
       const intervalMinutes = Math.max(1, Number(formData.get("interval_minutes")?.toString() || "120") || 120);
+      const addSetupTeardown = formData.get("add_setup_teardown") === "1";
 
       const toMinutes = (hhmm: string) => {
         const [h, m] = hhmm.split(":").map(Number);
@@ -242,6 +243,26 @@ async function createShifts(
       }
 
       const rows: Record<string, unknown>[] = [];
+
+      // Aufbauphase: 30 Min. vor Veranstaltungsbeginn
+      if (addSetupTeardown) {
+        const aufbauStart = startMin - 30;
+        if (aufbauStart >= 0) {
+          rows.push({
+            event_name: `${eventName} – Aufbau`,
+            date,
+            start_time: toHHMM(aufbauStart),
+            end_time: toHHMM(startMin),
+            location,
+            notes,
+            created_by: createdBy,
+            required_slots: requiredSlots,
+            ...(organizationId ? { organization_id: organizationId } : {})
+          });
+        }
+      }
+
+      // Hauptveranstaltung: Schichten im Intervall
       let slotStart = startMin;
       while (slotStart < endMin) {
         const slotEnd = Math.min(slotStart + intervalMinutes, endMin);
@@ -257,6 +278,24 @@ async function createShifts(
           ...(organizationId ? { organization_id: organizationId } : {})
         });
         slotStart = slotEnd;
+      }
+
+      // Abbauphase: 30 Min. nach Veranstaltungsende
+      if (addSetupTeardown) {
+        const abbauEnd = endMin + 30;
+        if (abbauEnd <= 24 * 60) {
+          rows.push({
+            event_name: `${eventName} – Abbau`,
+            date,
+            start_time: toHHMM(endMin),
+            end_time: toHHMM(abbauEnd),
+            location,
+            notes,
+            created_by: createdBy,
+            required_slots: requiredSlots,
+            ...(organizationId ? { organization_id: organizationId } : {})
+          });
+        }
       }
 
       const { data: created, error } = await service
