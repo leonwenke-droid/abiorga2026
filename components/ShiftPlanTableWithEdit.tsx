@@ -94,8 +94,6 @@ export default function ShiftPlanTableWithEdit({
     String(eventName ?? "")
       .trim()
       .replace(/\s*–\s*[12]\.\s*Pause$/i, "")
-      .replace(/\s*–\s*Aufbau$/i, "")
-      .replace(/\s*–\s*Abbau$/i, "")
       .replace(/\s*–\s*\d{1,2}:\d{2}–\d{1,2}:\d{2}$/, "")
       .trim() || "—";
 
@@ -291,6 +289,11 @@ export default function ShiftPlanTableWithEdit({
                             <div className="min-w-0 flex-1">
                               <div className="text-[11px] font-medium text-cyan-300">
                                 {timeStr(s.start_time)}–{timeStr(s.end_time)}
+                                {(s.has_aufbau || s.has_abbau) && (
+                                  <span className="ml-1 text-[10px] text-cyan-400/70">
+                                    ({[s.has_aufbau && "Aufbau", s.has_abbau && "Abbau"].filter(Boolean).join(" + ")})
+                                  </span>
+                                )}
                               </div>
                               <div className="flex flex-col gap-0.5 text-[10px] text-cyan-400/80">
                                 {names.length > 0 ? names.map((name, i) => <span key={i} className="truncate" title={name}>{name}</span>) : "–"}
@@ -341,6 +344,11 @@ export default function ShiftPlanTableWithEdit({
                       <tr key={s.id} className={idx % 2 === 0 ? "bg-transparent" : "bg-cyan-500/5"}>
                         <td className="py-2 px-2 whitespace-nowrap text-cyan-200 text-[11px] w-24">
                           {timeStr(s.start_time)}–{timeStr(s.end_time)}
+                          {(s.has_aufbau || s.has_abbau) && (
+                            <span className="ml-1 text-[10px] text-cyan-400/70">
+                              ({[s.has_aufbau && "Aufbau", s.has_abbau && "Abbau"].filter(Boolean).join(" + ")})
+                            </span>
+                          )}
                         </td>
                         <td className="py-2 px-2 text-cyan-200/90 align-top max-w-[100px]">
                           {names.length > 0 ? (

@@ -243,59 +243,43 @@ async function createShifts(
       }
 
       const rows: Record<string, unknown>[] = [];
-
-      // Aufbauphase: 30 Min. vor Veranstaltungsbeginn
-      if (addSetupTeardown) {
-        const aufbauStart = startMin - 30;
-        if (aufbauStart >= 0) {
-          rows.push({
-            event_name: `${eventName} – Aufbau`,
-            date,
-            start_time: toHHMM(aufbauStart),
-            end_time: toHHMM(startMin),
-            location,
-            notes,
-            created_by: createdBy,
-            required_slots: requiredSlots,
-            ...(organizationId ? { organization_id: organizationId } : {})
-          });
-        }
-      }
-
-      // Hauptveranstaltung: Schichten im Intervall
       let slotStart = startMin;
+      const slotTimes: { start: number; end: number }[] = [];
       while (slotStart < endMin) {
         const slotEnd = Math.min(slotStart + intervalMinutes, endMin);
+        slotTimes.push({ start: slotStart, end: slotEnd });
+        slotStart = slotEnd;
+      }
+
+      const firstSlotStart = addSetupTeardown && slotTimes[0]?.start - 30 >= 0
+        ? slotTimes[0].start - 30
+        : slotTimes[0]?.start ?? startMin;
+      const lastSlotEnd = addSetupTeardown && slotTimes.length > 0 && (slotTimes[slotTimes.length - 1]?.end ?? endMin) + 30 <= 24 * 60
+        ? (slotTimes[slotTimes.length - 1]?.end ?? endMin) + 30
+        : slotTimes[slotTimes.length - 1]?.end ?? endMin;
+
+      for (let i = 0; i < slotTimes.length; i++) {
+        const { start, end } = slotTimes[i];
+        const isFirst = i === 0;
+        const isLast = i === slotTimes.length - 1;
+        const effectiveStart = isFirst ? firstSlotStart : start;
+        const effectiveEnd = isLast ? lastSlotEnd : end;
+        const hasAufbau = addSetupTeardown && isFirst && firstSlotStart < start;
+        const hasAbbau = addSetupTeardown && isLast && lastSlotEnd > end;
+
         rows.push({
           event_name: eventName,
           date,
-          start_time: toHHMM(slotStart),
-          end_time: toHHMM(slotEnd),
+          start_time: toHHMM(effectiveStart),
+          end_time: toHHMM(effectiveEnd),
           location,
           notes,
           created_by: createdBy,
           required_slots: requiredSlots,
+          has_aufbau: hasAufbau,
+          has_abbau: hasAbbau,
           ...(organizationId ? { organization_id: organizationId } : {})
         });
-        slotStart = slotEnd;
-      }
-
-      // Abbauphase: 30 Min. nach Veranstaltungsende
-      if (addSetupTeardown) {
-        const abbauEnd = endMin + 30;
-        if (abbauEnd <= 24 * 60) {
-          rows.push({
-            event_name: `${eventName} – Abbau`,
-            date,
-            start_time: toHHMM(endMin),
-            end_time: toHHMM(abbauEnd),
-            location,
-            notes,
-            created_by: createdBy,
-            required_slots: requiredSlots,
-            ...(organizationId ? { organization_id: organizationId } : {})
-          });
-        }
       }
 
       const { data: created, error } = await service
@@ -452,7 +436,23 @@ async function replaceAssignment(assignmentId: string, formData: FormData) {
 }
 
 const SHIFT_DONE_POINTS = 10;
+const SHIFT_DONE_BONUS_AUFBAU = 5;
+const SHIFT_DONE_BONUS_ABBAU = 5;
 const SHIFT_MISSED_PENALTY = -15; // Nicht angetreten, kein Ersatz (kein Becheid)
+
+async function getShiftDonePoints(
+  service: ReturnType<typeof createSupabaseServiceRoleClient>,
+  shiftId: string
+): Promise<number> {
+  const { data: shift } = await service
+    .from("shifts")
+    .select("has_aufbau, has_abbau")
+    .eq("id", shiftId)
+    .single();
+  if (!shift) return SHIFT_DONE_POINTS;
+  const bonus = (shift.has_aufbau ? SHIFT_DONE_BONUS_AUFBAU : 0) + (shift.has_abbau ? SHIFT_DONE_BONUS_ABBAU : 0);
+  return SHIFT_DONE_POINTS + bonus;
+}
 
 /** Zugewiesene Person ist angetreten → Status erledigt, Trigger vergibt shift_done. */
 async function markAssignmentAttended(assignmentId: string) {
@@ -477,7 +477,7 @@ async function markAssignmentNotAttended(
   const service = createSupabaseServiceRoleClient();
   const { data: assignment } = await service
     .from("shift_assignments")
-    .select("user_id")
+    .select("user_id, shift_id")
     .eq("id", assignmentId)
     .single();
   if (!assignment?.user_id) return;
@@ -493,7 +493,8 @@ async function markAssignmentNotAttended(
 
   const originalUserId = assignment.user_id as string;
   if (replacementUserId) {
-    await service.from("engagement_events").insert({ user_id: replacementUserId, event_type: "shift_done", points: SHIFT_DONE_POINTS, source_id: assignmentId });
+    const points = await getShiftDonePoints(service, assignment.shift_id as string);
+    await service.from("engagement_events").insert({ user_id: replacementUserId, event_type: "shift_done", points, source_id: assignmentId });
   } else {
     await service.from("engagement_events").insert({
       user_id: originalUserId,
@@ -516,7 +517,7 @@ async function updateAssignmentStatus(
   const service = createSupabaseServiceRoleClient();
   const { data: assignment } = await service
     .from("shift_assignments")
-    .select("user_id")
+    .select("user_id, shift_id")
     .eq("id", assignmentId)
     .single();
   if (!assignment?.user_id) return;
@@ -535,7 +536,8 @@ async function updateAssignmentStatus(
   const originalUserId = assignment.user_id as string;
   if (status === "abgesagt") {
     if (replacementUserId) {
-      await service.from("engagement_events").insert({ user_id: replacementUserId, event_type: "shift_done", points: SHIFT_DONE_POINTS, source_id: assignmentId });
+      const points = await getShiftDonePoints(service, assignment.shift_id as string);
+      await service.from("engagement_events").insert({ user_id: replacementUserId, event_type: "shift_done", points, source_id: assignmentId });
     } else {
       await service.from("engagement_events").insert({ user_id: originalUserId, event_type: "shift_missed", points: SHIFT_MISSED_PENALTY, source_id: assignmentId });
     }
@@ -642,7 +644,7 @@ export default async function ShiftsPage(props: ShiftsPageProps) {
 
   const shiftsQuery = service
     .from("shifts")
-    .select("id, event_name, date, start_time, end_time, location, notes")
+    .select("id, event_name, date, start_time, end_time, location, notes, has_aufbau, has_abbau")
     .order("date", { ascending: true });
   const profilesQuery = service.from("profiles").select("id, full_name").order("full_name");
   if (orgId) {
@@ -690,6 +692,8 @@ export default async function ShiftsPage(props: ShiftsPageProps) {
     start_time: (s.start_time as string) ?? "",
     end_time: (s.end_time as string) ?? "",
     location: (s.location as string | null) ?? null,
+    has_aufbau: !!(s.has_aufbau as boolean),
+    has_abbau: !!(s.has_abbau as boolean),
     shift_assignments: assignmentsByShift.get((s.id as string) ?? "") ?? []
   }));
 

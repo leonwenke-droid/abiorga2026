@@ -10,6 +10,8 @@ export type ShiftForPdf = {
   start_time: string;
   end_time: string;
   location?: string | null;
+  has_aufbau?: boolean;
+  has_abbau?: boolean;
   shift_assignments?: { id: string; status: string; user_id: string; replacement_user_id?: string | null }[];
 };
 

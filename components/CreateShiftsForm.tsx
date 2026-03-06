@@ -135,7 +135,7 @@ export default function CreateShiftsForm({
               </span>
             </label>
             <p className="text-[10px] text-cyan-400/70 ml-6">
-              Ergänzend zur Veranstaltung: Aufbau vor Start, Abbau nach Ende.
+              Erste Schicht startet 30 Min. früher (Aufbau), letzte endet 30 Min. später (Abbau). Zusätzliche Engagement-Punkte.
             </p>
           </div>
           <div className="space-y-1 md:col-span-2">
