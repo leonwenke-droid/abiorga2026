@@ -645,7 +645,8 @@ export default async function ShiftsPage(props: ShiftsPageProps) {
   const shiftsQuery = service
     .from("shifts")
     .select("id, event_name, date, start_time, end_time, location, notes, has_aufbau, has_abbau")
-    .order("date", { ascending: true });
+    .order("date", { ascending: true })
+    .order("start_time", { ascending: true });
   const profilesQuery = service.from("profiles").select("id, full_name").order("full_name");
   if (orgId) {
     shiftsQuery.eq("organization_id", orgId);

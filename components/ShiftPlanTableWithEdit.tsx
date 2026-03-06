@@ -97,15 +97,22 @@ export default function ShiftPlanTableWithEdit({
       .replace(/\s*–\s*\d{1,2}:\d{2}–\d{1,2}:\d{2}$/, "")
       .trim() || "—";
 
+  const sortShiftsByTime = (arr: any[]) =>
+    [...arr].sort((a, b) => {
+      const ta = String(a.start_time ?? "").replace(":", "");
+      const tb = String(b.start_time ?? "").replace(":", "");
+      return ta.localeCompare(tb);
+    });
+
   const byDateAndEvent = (dateStr: string) => {
-    const dayShifts = byDate[dateStr] ?? [];
+    const dayShifts = sortShiftsByTime(byDate[dateStr] ?? []);
     const map = new Map<string, any[]>();
     for (const s of dayShifts) {
       const key = eventGroupKey(s.event_name);
       if (!map.has(key)) map.set(key, []);
       map.get(key)!.push(s);
     }
-    return Array.from(map.entries());
+    return Array.from(map.entries()).map(([k, v]) => [k, sortShiftsByTime(v)] as [string, any[]]);
   };
 
   const renderEditStatusForm = (a: AssignmentRow) => {
