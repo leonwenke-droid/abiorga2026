@@ -74,9 +74,10 @@ export async function removeScoreImport(orgSlug: string, logId: string) {
   }
   if (!logId) return { error: "Eintrag nicht gefunden." };
 
-  const supabase = process.env.SUPABASE_SERVICE_ROLE_KEY
-    ? createSupabaseServiceRoleClient()
-    : createServerComponentClient({ cookies });
+  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    return { error: "Server-Konfiguration: SUPABASE_SERVICE_ROLE_KEY fehlt. Entfernen nicht möglich." };
+  }
+  const supabase = createSupabaseServiceRoleClient();
 
   const { data: logRow, error: fetchErr } = await supabase
     .from("score_import_log")

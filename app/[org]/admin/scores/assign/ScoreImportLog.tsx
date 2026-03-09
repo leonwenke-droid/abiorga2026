@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { removeScoreImport } from "./actions";
 
@@ -16,12 +17,21 @@ type LogEntry = {
 
 export default function ScoreImportLog({ entries, orgSlug }: { entries: LogEntry[]; orgSlug: string }) {
   const router = useRouter();
+  const [error, setError] = useState<string | null>(null);
+  const [removingId, setRemovingId] = useState<string | null>(null);
 
   async function handleRemove(formData: FormData) {
     const logId = formData.get("logId")?.toString();
     if (!logId) return;
+    setError(null);
+    setRemovingId(logId);
     const result = await removeScoreImport(orgSlug, logId);
-    if (!result.error) router.refresh();
+    setRemovingId(null);
+    if (result.error) {
+      setError(result.error);
+    } else {
+      router.refresh();
+    }
   }
 
   if (entries.length === 0) return null;
@@ -46,6 +56,11 @@ export default function ScoreImportLog({ entries, orgSlug }: { entries: LogEntry
       <h2 className="text-sm font-semibold text-cyan-300 mb-3">
         Protokoll: Individuell vergebene Punkte
       </h2>
+      {error && (
+        <p className="mb-4 text-sm text-red-300" role="alert">
+          {error}
+        </p>
+      )}
       <p className="text-xs text-cyan-400/80 mb-4">
         Wann, wie viele Punkte, an wen, Begründung und Vergeber.
       </p>
@@ -81,14 +96,15 @@ export default function ScoreImportLog({ entries, orgSlug }: { entries: LogEntry
                       <input type="hidden" name="logId" value={e.id} />
                       <button
                         type="submit"
-                        className="rounded px-2 py-1 text-[10px] text-red-300 hover:bg-red-500/20 hover:text-red-200"
+                        disabled={removingId === e.id}
+                        className="rounded px-2 py-1 text-[10px] text-red-300 hover:bg-red-500/20 hover:text-red-200 disabled:opacity-50"
                         title="Punkte entfernen"
                       >
-                        Entfernen
+                        {removingId === e.id ? "…" : "Entfernen"}
                       </button>
                     </form>
                   ) : (
-                    <span className="text-cyan-500/50 text-[10px]" title="Ältere Einträge ohne Verknüpfung">–</span>
+                    <span className="text-cyan-500/50 text-[10px]" title="Einträge vor dem Update können nicht entfernt werden">–</span>
                   )}
                 </td>
               </tr>
