@@ -31,10 +31,10 @@ export default async function AssignPointsPage({
     .eq("organization_id", org.id)
     .order("full_name");
 
-  let logEntries: { id: string; user_id: string; recipientName: string; points: number; reason: string; created_at: string; createdBy: string }[] = [];
+  let logEntries: { id: string; user_id: string; recipientName: string; points: number; reason: string; created_at: string; createdBy: string; canRemove: boolean }[] = [];
   const { data: logRows, error: logErr } = await supabase
     .from("score_import_log")
-    .select("id, user_id, points, reason, created_at, created_by")
+    .select("id, user_id, points, reason, created_at, created_by, engagement_event_id")
     .eq("organization_id", org.id)
     .order("created_at", { ascending: false })
     .limit(100);
@@ -57,7 +57,8 @@ export default async function AssignPointsPage({
       points: row.points,
       reason: row.reason ?? "",
       created_at: row.created_at,
-      createdBy: nameMap.get(row.created_by) ?? "–"
+      createdBy: nameMap.get(row.created_by) ?? "–",
+      canRemove: !!row.engagement_event_id
     }));
   }
 
@@ -81,7 +82,7 @@ export default async function AssignPointsPage({
         orgSlug={orgSlug}
         members={(members ?? []).map((m) => ({ id: m.id, full_name: m.full_name ?? "-" }))}
       />
-      <ScoreImportLog entries={logEntries} />
+      <ScoreImportLog entries={logEntries} orgSlug={orgSlug} />
     </div>
   );
 }

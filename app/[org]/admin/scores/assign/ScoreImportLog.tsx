@@ -1,5 +1,8 @@
 "use client";
 
+import { useRouter } from "next/navigation";
+import { removeScoreImport } from "./actions";
+
 type LogEntry = {
   id: string;
   user_id: string;
@@ -8,9 +11,19 @@ type LogEntry = {
   reason: string;
   created_at: string;
   createdBy: string;
+  canRemove?: boolean;
 };
 
-export default function ScoreImportLog({ entries }: { entries: LogEntry[] }) {
+export default function ScoreImportLog({ entries, orgSlug }: { entries: LogEntry[]; orgSlug: string }) {
+  const router = useRouter();
+
+  async function handleRemove(formData: FormData) {
+    const logId = formData.get("logId")?.toString();
+    if (!logId) return;
+    const result = await removeScoreImport(orgSlug, logId);
+    if (!result.error) router.refresh();
+  }
+
   if (entries.length === 0) return null;
 
   function formatDate(iso: string) {
@@ -44,7 +57,8 @@ export default function ScoreImportLog({ entries }: { entries: LogEntry[] }) {
               <th className="py-2 pr-4 font-medium">Empfänger</th>
               <th className="py-2 pr-4 font-medium text-right">Punkte</th>
               <th className="py-2 pr-4 font-medium">Begründung</th>
-              <th className="py-2 font-medium">Vergeber</th>
+              <th className="py-2 pr-4 font-medium">Vergeber</th>
+              <th className="py-2 w-16 text-right font-medium">Aktion</th>
             </tr>
           </thead>
           <tbody>
@@ -61,6 +75,22 @@ export default function ScoreImportLog({ entries }: { entries: LogEntry[] }) {
                   {e.reason}
                 </td>
                 <td className="py-2.5 text-cyan-400/80">{e.createdBy}</td>
+                <td className="py-2.5 text-right">
+                  {e.canRemove ? (
+                    <form action={handleRemove} className="inline">
+                      <input type="hidden" name="logId" value={e.id} />
+                      <button
+                        type="submit"
+                        className="rounded px-2 py-1 text-[10px] text-red-300 hover:bg-red-500/20 hover:text-red-200"
+                        title="Punkte entfernen"
+                      >
+                        Entfernen
+                      </button>
+                    </form>
+                  ) : (
+                    <span className="text-cyan-500/50 text-[10px]" title="Ältere Einträge ohne Verknüpfung">–</span>
+                  )}
+                </td>
               </tr>
             ))}
           </tbody>

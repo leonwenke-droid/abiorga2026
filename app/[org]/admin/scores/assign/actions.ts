@@ -40,22 +40,66 @@ export async function assignPoints(
     createdBy = profile?.id ?? null;
   }
 
-  const { error: eventErr } = await supabase.from("engagement_events").insert({
-    user_id: profileId,
-    event_type: "score_import",
-    points,
-    source_id: null
-  });
-  if (eventErr) return { error: eventErr.message };
+  const { data: eventRow, error: eventErr } = await supabase
+    .from("engagement_events")
+    .insert({
+      user_id: profileId,
+      event_type: "score_import",
+      points,
+      source_id: null
+    })
+    .select("id")
+    .single();
+  if (eventErr || !eventRow) return { error: eventErr?.message ?? "Engagement-Event konnte nicht angelegt werden." };
 
   const { error: logErr } = await supabase.from("score_import_log").insert({
     organization_id: org.id,
     user_id: profileId,
     points,
     reason: trimmedReason,
-    created_by: createdBy
+    created_by: createdBy,
+    engagement_event_id: eventRow.id
   });
   if (logErr) return { error: logErr.message };
+
+  revalidatePath(`/${orgSlug}/admin`);
+  revalidatePath(`/${orgSlug}/admin/scores/assign`);
+  return { success: true };
+}
+
+export async function removeScoreImport(orgSlug: string, logId: string) {
+  const org = await getCurrentOrganization(orgSlug);
+  if (!(await isOrgAdmin(org.id))) {
+    return { error: "Keine Berechtigung." };
+  }
+  if (!logId) return { error: "Eintrag nicht gefunden." };
+
+  const supabase = process.env.SUPABASE_SERVICE_ROLE_KEY
+    ? createSupabaseServiceRoleClient()
+    : createServerComponentClient({ cookies });
+
+  const { data: logRow, error: fetchErr } = await supabase
+    .from("score_import_log")
+    .select("id, engagement_event_id, organization_id")
+    .eq("id", logId)
+    .eq("organization_id", org.id)
+    .single();
+  if (fetchErr || !logRow) return { error: "Eintrag nicht gefunden oder keine Berechtigung." };
+  if (!logRow.engagement_event_id) {
+    return { error: "Ältere Einträge ohne Verknüpfung können nicht entfernt werden." };
+  }
+
+  const { error: delEventErr } = await supabase
+    .from("engagement_events")
+    .delete()
+    .eq("id", logRow.engagement_event_id);
+  if (delEventErr) return { error: delEventErr.message };
+
+  const { error: delLogErr } = await supabase
+    .from("score_import_log")
+    .delete()
+    .eq("id", logId);
+  if (delLogErr) return { error: delLogErr.message };
 
   revalidatePath(`/${orgSlug}/admin`);
   revalidatePath(`/${orgSlug}/admin/scores/assign`);
