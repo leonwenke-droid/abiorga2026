@@ -103,9 +103,7 @@ export default function ScoreImportLog({ entries, orgSlug }: { entries: LogEntry
                         {removingId === e.id ? "…" : "Entfernen"}
                       </button>
                     </form>
-                  ) : (
-                    <span className="text-cyan-500/50 text-[10px]" title="Einträge vor dem Update können nicht entfernt werden">–</span>
-                  )}
+                  ) : null}
                 </td>
               </tr>
             ))}

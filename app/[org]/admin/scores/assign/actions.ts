@@ -81,19 +81,39 @@ export async function removeScoreImport(orgSlug: string, logId: string) {
 
   const { data: logRow, error: fetchErr } = await supabase
     .from("score_import_log")
-    .select("id, engagement_event_id, organization_id")
+    .select("id, user_id, points, created_at, engagement_event_id, organization_id")
     .eq("id", logId)
     .eq("organization_id", org.id)
     .single();
   if (fetchErr || !logRow) return { error: "Eintrag nicht gefunden oder keine Berechtigung." };
-  if (!logRow.engagement_event_id) {
-    return { error: "Ältere Einträge ohne Verknüpfung können nicht entfernt werden." };
+
+  let eventId = logRow.engagement_event_id as string | null;
+  if (!eventId) {
+    const logCreated = new Date((logRow as any).created_at).getTime();
+    const { data: candidates } = await supabase
+      .from("engagement_events")
+      .select("id, created_at")
+      .eq("user_id", logRow.user_id)
+      .eq("event_type", "score_import")
+      .eq("points", logRow.points)
+      .is("source_id", null)
+      .gte("created_at", new Date(logCreated - 120000).toISOString())
+      .lte("created_at", new Date(logCreated + 120000).toISOString());
+    if (!candidates?.length) return { error: "Zugehöriges Engagement-Event nicht gefunden." };
+    if (candidates.length > 1) {
+      const closest = candidates.reduce((a, b) =>
+        Math.abs(new Date(a.created_at).getTime() - logCreated) < Math.abs(new Date(b.created_at).getTime() - logCreated) ? a : b
+      );
+      eventId = closest.id;
+    } else {
+      eventId = candidates[0].id;
+    }
   }
 
   const { error: delEventErr } = await supabase
     .from("engagement_events")
     .delete()
-    .eq("id", logRow.engagement_event_id);
+    .eq("id", eventId);
   if (delEventErr) return { error: delEventErr.message };
 
   const { error: delLogErr } = await supabase

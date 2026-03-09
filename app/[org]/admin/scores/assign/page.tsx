@@ -58,7 +58,7 @@ export default async function AssignPointsPage({
       reason: row.reason ?? "",
       created_at: row.created_at,
       createdBy: nameMap.get(row.created_by) ?? "–",
-      canRemove: !!row.engagement_event_id
+      canRemove: true
     }));
   }
 
