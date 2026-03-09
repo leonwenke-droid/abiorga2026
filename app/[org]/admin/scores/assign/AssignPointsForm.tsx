@@ -14,6 +14,7 @@ export default function AssignPointsForm({
 }) {
   const [profileId, setProfileId] = useState("");
   const [points, setPoints] = useState("");
+  const [reason, setReason] = useState("");
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{ type: "ok" | "error"; text: string } | null>(null);
 
@@ -24,9 +25,14 @@ export default function AssignPointsForm({
       setMessage({ type: "error", text: "Mitglied wählen und Punkte (Zahl) angeben." });
       return;
     }
+    const trimmedReason = reason.trim();
+    if (!trimmedReason) {
+      setMessage({ type: "error", text: "Bitte eine Begründung angeben." });
+      return;
+    }
     setLoading(true);
     setMessage(null);
-    const result = await assignPoints(orgSlug, profileId, num);
+    const result = await assignPoints(orgSlug, profileId, num, trimmedReason);
     setLoading(false);
     if (result.error) {
       setMessage({ type: "error", text: result.error });
@@ -34,6 +40,7 @@ export default function AssignPointsForm({
     }
     setMessage({ type: "ok", text: "Punkte wurden vergeben." });
     setPoints("");
+    setReason("");
   }
 
   return (
@@ -67,6 +74,19 @@ export default function AssignPointsForm({
           onChange={(e) => setPoints(e.target.value)}
           placeholder="z. B. 10 oder -5"
           className="w-full rounded border border-cyan-500/30 bg-background p-2 text-sm"
+        />
+      </div>
+      <div>
+        <label className="mb-1 block text-xs font-semibold text-cyan-400">
+          Begründung <span className="text-cyan-500/70">(Pflicht)</span>
+        </label>
+        <textarea
+          required
+          value={reason}
+          onChange={(e) => setReason(e.target.value)}
+          placeholder="z. B. Materialbeschaffung für Karnevalsparty, Veranstaltung unterstützt …"
+          rows={3}
+          className="w-full rounded border border-cyan-500/30 bg-background p-2 text-sm resize-y"
         />
       </div>
       {message && (
